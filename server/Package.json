@@ -1,0 +1,20 @@
+{
+  "name": "bomberman-arena-server",
+  "version": "0.1.0",
+  "description": "Serveur backend de Bomberman Arena (moteur de jeu + WebSocket)",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch & node --watch dist/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.5.0"
+  }
+}
