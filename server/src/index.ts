@@ -14,8 +14,7 @@ wss.on('connection', (socket: WebSocket) => {
       const message = JSON.parse(data.toString());
       console.log('Message reçu :', message);
 
-      // Exemple minimal : on reconnaît le message MOVE défini dans le protocole
-      // et on répond par un POSITION_UPDATED, comme prévu dans la documentation.
+      // Exemple minimal, on reconnaît le message MOVE défini dans le protocole
       if (message.type === 'MOVE') {
         const response = {
           type: 'POSITION_UPDATED',
