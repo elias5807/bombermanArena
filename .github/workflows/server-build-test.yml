@@ -32,6 +32,6 @@ jobs:
       working-directory: server
       run: |
        npm ci
-       npm typecheck
+       npm run typecheck
        npm run build --if-present
        npm test
