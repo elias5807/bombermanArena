@@ -20,6 +20,16 @@ jobs:
         with:
           # Full git history is needed to get a proper list of changed files within `super-linter`
           fetch-depth: 0
+      - name: Installer Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Installer les dépendences de Node.js
+        working-directory: server
+        run: npm ci
 
       - name: Lint Code Base
         uses: super-linter/super-linter@v8.7.0
