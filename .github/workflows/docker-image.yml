@@ -9,11 +9,38 @@ on:
 jobs:
 
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
+    - name: Obtenir le dépôt
+      uses: actions/checkout@v6
     - name: Créer image docker
       working-directory: ./server
-      run: docker build --file Dockerfile --tag bomberman-server:$(date +%s) .
+      run: docker build --file Dockerfile --tag bomberman-server:${{ github.sha }} .
+    - name: Sauvegarder image
+      run: docker save bomberman-server:${{ github.sha }} -o bomberman-server-${{ github.sha }}.tar
+    - name: "Garder l'image Docker pour l'étape suivante"
+      uses: actions/upload-artifact@v4
+      with:
+        name: docker-image
+        path: bomberman-server-${{ github.sha }}.tar
+
+  publish:
+    needs: build
+    permissions:
+      contents: write
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Télécharger image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+      - name: Github Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: bomberman-server-${{ github.sha }}.tar
+          target_commitish: ${{ github.sha }}
+          tag_name: build-${{ github.ref_name }}-${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
