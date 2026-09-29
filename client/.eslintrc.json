@@ -1,0 +1,63 @@
+{
+  "root": true,
+  "env": { "browser": true, "es2023": true, "node": true },
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": { "ecmaVersion": "latest", "sourceType": "module" },
+  "plugins": ["@typescript-eslint"],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "prettier"
+  ],
+  "ignorePatterns": ["dist", "node_modules"],
+  "overrides": [
+    {
+      "files": ["src/render/**/*.ts", "src/ui/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/network/**"],
+                "message": "L'affichage ne parle jamais au réseau directement : passer par l'EventBus."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/network/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["pixi.js", "**/render/**", "**/ui/**"],
+                "message": "La couche réseau ne connaît pas l'affichage : publier sur l'EventBus."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/input/**/*.ts", "src/state/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["pixi.js", "**/network/**", "**/render/**"],
+                "message": "Cette couche ne connaît ni le réseau ni le rendu : passer par l'EventBus."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
