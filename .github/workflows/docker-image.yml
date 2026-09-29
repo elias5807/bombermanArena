@@ -1,0 +1,19 @@
+name: Créer image docker pour push
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Créer image docker
+      working-directory: ./server
+      run: docker build --file Dockerfile --tag bomberman-server:$(date +%s) .
