@@ -53,7 +53,7 @@ Si ça répond, le serveur fonctionne.
 
 # Architecture
 
-'''
+'''text
 ├── 📁 .github/ workflows/ ...
 ├── 🐳 docker-compose.yml       <-- NOUVEAU : Lance le client et le serveur ensemble
 ├── ⚙️ package.json             <-- NOUVEAU : Gère les workspaces (client, server, shared)
