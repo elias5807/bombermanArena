@@ -17,6 +17,9 @@
     /* Nécessaire pour les scénarios simulés de src/mocks/fixtures */
     "resolveJsonModule": true,
 
+    /* Types partagés avec le serveur : un seul point à changer si shared/ est déplacé */
+    "paths": { "@shared/*": ["../shared/src/*"] },
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
