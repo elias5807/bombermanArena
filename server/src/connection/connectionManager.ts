@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { ClientMessage, ServerMessage } from '../protocol/messages.js';
+import { addPlayerToLobby, removePlayerFromLobby } from '../lobby/lobbyManager.js';
 
 export function startConnectionManager(port: number): WebSocketServer {
   const wss = new WebSocketServer({ port });
@@ -8,6 +9,9 @@ export function startConnectionManager(port: number): WebSocketServer {
 
   wss.on('connection', (socket: WebSocket) => {
     console.log('Un joueur vient de se connecter');
+
+    // playerId n'est connu qu'une fois JOIN_LOBBY reçu, donc undefined au départ.
+    let playerId: string | undefined;
 
     socket.on('message', (data) => {
       let message: ClientMessage;
@@ -21,8 +25,8 @@ export function startConnectionManager(port: number): WebSocketServer {
 
       switch (message.type) {
         case 'JOIN_LOBBY': {
-          // TODO: brancher sur le vrai lobbyManager une fois créé.
-          console.log(`${message.playerName} demande à rejoindre le lobby`);
+          playerId = addPlayerToLobby(socket, message.playerName) ?? undefined;
+          console.log(`${message.playerName} a rejoint le lobby (id: ${playerId ?? 'refusé, lobby plein'})`);
           break;
         }
 
@@ -44,6 +48,9 @@ export function startConnectionManager(port: number): WebSocketServer {
 
     socket.on('close', () => {
       console.log('Un joueur s\'est déconnecté');
+      if (playerId) {
+        removePlayerFromLobby(playerId);
+      }
     });
   });
 
