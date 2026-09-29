@@ -51,4 +51,45 @@ Recevoir :
  
 Si ça répond, le serveur fonctionne.
 
+# Architecture
+
+'''
+├── 📁 .github/ workflows/ ...
+├── 🐳 docker-compose.yml       <-- NOUVEAU : Lance le client et le serveur ensemble
+├── ⚙️ package.json             <-- NOUVEAU : Gère les workspaces (client, server, shared)
+├── 📁 shared                   <-- NOUVEAU : Code commun
+│   ├── 📁 src
+│   │   ├── 📁 constants        (Taille de la grille, vitesse, timers des bombes)
+│   │   ├── 📁 types            (Interfaces communes : Player, GameState, etc.)
+│   │   ├── 📁 protocol         (Définition stricte des messages réseau)
+│   │   └── 📁 math             (Utilitaires de collision ou de grille partagés)
+│   ├── ⚙️ package.json
+│   └── ⚙️ tsconfig.json
+├── 📁 client                   (Ton frontend Vite)
+│   ├── 🐳 Dockerfile           <-- NOUVEAU : Pour conteneuriser le build Vite (Nginx)
+│   ├── 📁 src
+│   │   ├── 📁 core             (Boucle de jeu côté client, interpolation)
+│   │   ├── 📁 input            (Gestion clavier/manette)
+│   │   ├── 📁 network          (Socket.io ou WebSockets, écoute du serveur)
+│   │   ├── 📁 render           (Moteur de rendu, ex: Canvas/PixiJS)
+│   │   │   ├── 📁 scenes
+│   │   │   └── 📁 sprites
+│   │   ├── 📁 state            (Stockage local de l'état du jeu)
+│   │   └── 📁 ui               (Menus, HUD, scores en React/Vue ou HTML pur)
+│   └── ... (fichiers de config)
+├── 📁 server                   (Ton backend Node.js)
+│   ├── 📁 src
+│   │   ├── 📁 game             <-- NOUVEAU : Le moteur de jeu du serveur
+│   │   │   ├── 📄 engine.ts    (Boucle de jeu "Authoritative")
+│   │   │   ├── 📄 grid.ts      (Gestion de la carte et destructions)
+│   │   │   └── 📄 entities.ts  (Joueurs, Bombes, Bonus)
+│   │   ├── 📁 network          <-- RÉORGANISÉ
+│   │   │   ├── 📄 connectionManager.ts
+│   │   │   └── 📄 lobbyManager.ts
+│   │   └── 📄 index.ts
+│   └── 🐳 Dockerfile           (Déjà présent)
+└── 📝 README.md
+
+'''
+
 
