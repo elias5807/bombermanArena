@@ -95,6 +95,23 @@ fichier de `render/` importe `network/`, ou si `network/` importe PixiJS. Les
 règles de style et de qualité proprement dites relèvent du pôle DevOps &
 Qualité, qui complètera ce fichier.
 
+## Types partagés avec le serveur
+
+Le protocole WebSocket est défini une seule fois, dans `../shared/src/protocol/`,
+et importé par le client via l'alias `@shared` (voir `tsconfig.json`) :
+
+```ts
+import type { ServerMessage } from '@shared/protocol/messages';
+```
+
+Toujours écrire `import type { ... }` (et non `import { type ... }`) : l'import
+est alors effacé à la compilation et ne dépend pas de `shared/` à l'exécution.
+Si un import de **valeur** devient nécessaire (constantes de grille, par
+exemple), il faudra déclarer le même alias dans `vite.config.ts`.
+
+Le client ne dépend d'aucun workspace npm : il garde son propre
+`package.json` et son propre `package-lock.json`.
+
 ## État d'avancement
 
 Ce squelette contient l'outillage et la structure. Arrivent dans des PR
