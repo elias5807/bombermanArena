@@ -95,6 +95,48 @@ fichier de `render/` importe `network/`, ou si `network/` importe PixiJS. Les
 règles de style et de qualité proprement dites relèvent du pôle DevOps &
 Qualité, qui complètera ce fichier.
 
+## Bus d'événements
+
+`src/core/EventBus.ts` est le seul canal entre les couches. Il est générique : il
+ne connaît ni les noms d'événements ni leur contenu, décrits par une carte
+`nom → type de la donnée` que l'application lui fournit. Le compilateur vérifie
+ainsi chaque publication et chaque abonnement.
+
+```ts
+interface ExampleEvents {
+  'input:move': { direction: 'up' | 'down' | 'left' | 'right' };
+  'input:bomb': undefined;
+}
+
+const bus = new EventBus<ExampleEvents>();
+
+const unsubscribe = bus.on('input:move', ({ direction }) => console.log(direction));
+bus.emit('input:move', { direction: 'up' });
+bus.emit('input:bomb'); // pas de donnée à fournir
+unsubscribe();
+```
+
+| Méthode                | Rôle                                                      |
+| ---------------------- | --------------------------------------------------------- |
+| `on(event, handler)`   | S'abonne ; retourne la fonction qui annule l'abonnement   |
+| `once(event, handler)` | S'abonne pour une seule réception                         |
+| `off(event, handler)`  | Retire un abonné                                          |
+| `emit(event, payload)` | Publie l'événement : synchrone, dans l'ordre d'abonnement |
+
+Points à connaître :
+
+- Une seule instance, créée par `App.ts` (assemblage des couches) et transmise aux
+  couches : il n'y a pas de bus global, chaque test crée le sien.
+- Une couche qui disparaît (changement de scène, par exemple) doit se désabonner,
+  sinon elle continue de recevoir les événements.
+- Un abonné qui lève une exception n'empêche pas les suivants de recevoir
+  l'événement : l'erreur est écrite dans la console. Dans un test, passer au
+  constructeur une fonction qui relance l'erreur pour qu'elle ne soit pas avalée :
+  `new EventBus<Events>((error) => { throw error; })`.
+- Les événements du jeu (noms et données) restent à définir avec les couches
+  `network/` et `state/`. Convention prévue : un préfixe par couche émettrice
+  (`input:*`, `server:*`).
+
 ## Types partagés avec le serveur
 
 Le protocole WebSocket est défini une seule fois, dans `../shared/src/protocol/`,
@@ -114,7 +156,6 @@ Le client ne dépend d'aucun workspace npm : il garde son propre
 
 ## État d'avancement
 
-Ce squelette contient l'outillage et la structure. Arrivent dans des PR
-dédiées : l'`EventBus`, la couche
-réseau avec son `MockServerAdapter`, le rendu PixiJS, puis l'assemblage des
-couches dans `App.ts`.
+Ce squelette contient l'outillage, la structure et l'`EventBus`. Arrivent dans
+des PR dédiées : la couche réseau avec son `MockServerAdapter`, le rendu PixiJS,
+puis l'assemblage des couches dans `App.ts`.
