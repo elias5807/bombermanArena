@@ -1,0 +1,9 @@
+# Fins de ligne LF dans le client, quel que soit le système.
+# Sous Windows, Git (core.autocrlf=true) extrait sinon les fichiers en CRLF,
+# et Prettier (endOfLine: lf par défaut) les signale tous comme mal formatés.
+* text=auto eol=lf
+
+# Binaires : jamais convertis (icônes de l'application Tauri).
+*.png binary
+*.ico binary
+*.icns binary
