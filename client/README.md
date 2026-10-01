@@ -18,19 +18,24 @@ npm run dev
 
 ## Scripts
 
-| Script                | Rôle                                            |
-| --------------------- | ----------------------------------------------- |
-| `npm run dev`         | Serveur de développement Vite                   |
-| `npm run build`       | Vérification des types puis build de production |
-| `npm run typecheck`   | Vérification des types seule                    |
-| `npm test`            | Tests unitaires et d'intégration (Vitest)       |
-| `npm run lint`        | ESLint                                          |
-| `npm run format`      | Prettier                                        |
-| `npm run tauri dev`   | Lance l'application desktop (fenêtre Tauri)     |
-| `npm run tauri build` | Produit l'exécutable et les installeurs Windows |
+| Script                 | Rôle                                               |
+| ---------------------- | -------------------------------------------------- |
+| `npm run dev`          | Serveur de développement Vite                      |
+| `npm run build`        | Vérification des types puis build de production    |
+| `npm run preview`      | Sert le build de production en local               |
+| `npm run typecheck`    | Vérification des types seule                       |
+| `npm test`             | Tests unitaires et d'intégration (Vitest)          |
+| `npm run lint`         | ESLint                                             |
+| `npm run format`       | Prettier : réécrit les fichiers                    |
+| `npm run format:check` | Prettier : vérifie le formatage sans rien modifier |
+| `npm run tauri dev`    | Lance l'application desktop (fenêtre Tauri)        |
+| `npm run tauri build`  | Produit l'exécutable et les installeurs Windows    |
 
-Ces quatre derniers scripts sont ceux attendus par le pipeline CI du pôle
-DevOps & Qualité (`.github/workflows/ci-cd-client.yml`).
+Les scripts `build`, `typecheck`, `lint`, `format:check` et `test` sont ceux
+attendus par le pipeline CI du pôle DevOps & Qualité
+(`.github/workflows/ci-cd-client.yml`, à venir). Les fins de ligne sont fixées
+à LF par `.gitattributes`, pour que `format:check` donne le même résultat sous
+Windows et sous Linux.
 
 ## Application desktop (Tauri)
 
