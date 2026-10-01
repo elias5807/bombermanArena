@@ -151,6 +151,56 @@ exemple), il faudra déclarer le même alias dans `vite.config.ts`.
 Le client ne dépend d'aucun workspace npm : il garde son propre
 `package.json` et son propre `package-lock.json`.
 
+## Mode mock (hors ligne)
+
+Le client doit pouvoir tourner et être testé sans serveur. Toutes les couches
+parlent à une `IGameConnection` (`src/network/IGameConnection.ts`) sans savoir si
+elle est réelle ou simulée ; le choix se fera en un seul point, au démarrage.
+
+| Méthode              | Rôle                                                                             |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `connect()`          | Ouvre la connexion (promesse) ; sans effet si elle est déjà ouverte              |
+| `send(message)`      | Envoie un message au serveur ; lève une erreur si la connexion n'est pas ouverte |
+| `onMessage(handler)` | S'abonne aux messages du serveur ; retourne la fonction qui annule l'abonnement  |
+| `disconnect()`       | Ferme la connexion ; les abonnements sont conservés                              |
+
+`MockServerAdapter` est l'implémentation simulée. Dès la connexion, il rejoue un
+**scénario** : des messages du serveur, chacun avec son délai.
+
+```ts
+const connection: IGameConnection = new MockServerAdapter(gameSessionScenario);
+connection.onMessage((message) => console.log(message.type)); // avant connect()
+await connection.connect();
+```
+
+Scénarios fournis (`src/mocks/fixtures/`) :
+
+| Scénario       | Contenu                                                                   |
+| -------------- | ------------------------------------------------------------------------- |
+| `lobby`        | Trois joueurs arrivent, puis l'un d'eux part ; la partie ne démarre pas   |
+| `game-session` | Le lobby se remplit à quatre, la partie démarre, les joueurs se déplacent |
+
+Un scénario est une liste d'étapes `{ delayMs, message }`, où `delayMs` est
+l'attente après l'étape précédente. `joinLobbySteps` (`src/mocks/lobbySteps.ts`)
+produit les messages d'arrivée dans un lobby, tels que le serveur les envoie.
+
+Points à connaître :
+
+- Les scénarios sont écrits en TypeScript, pas en JSON : le protocole partagé les
+  type, donc `npm run typecheck` signale ceux à corriger quand le Backend change un
+  message.
+- Ils ne peuvent contenir que des messages définis dans `shared/` : bombes,
+  explosions, murs détruits et fin de partie arriveront avec le protocole. Le champ
+  `position`, encore une simple chaîne, reçoit comme sur le serveur la direction du
+  déplacement.
+- Le mock ne réagit pas à `send` : il rejoue son scénario quoi que le client
+  envoie. En test, `sentMessages` donne la liste de ce qui a été envoyé.
+- Les messages sont livrés de façon asynchrone, en copie neuve : un abonné peut la
+  modifier sans altérer le scénario. Après `disconnect()`, une nouvelle connexion
+  rejoue le scénario depuis le début.
+- En test, les minuteurs simulés de Vitest (`vi.useFakeTimers()`) évitent d'attendre
+  les délais : voir `tests/integration/mock-session.test.ts`.
+
 ## État d'avancement
 
 Ce squelette contient l'outillage et la structure. Arrivent dans des PR
