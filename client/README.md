@@ -69,6 +69,45 @@ Points à connaître :
 - Le Cargo.lock est versionné (`src-tauri/Cargo.lock`) : c'est une application,
   pas une bibliothèque, et la CI doit compiler les mêmes versions que nous.
 
+## Rendu (PixiJS)
+
+L'affichage est dessiné avec [PixiJS 8](https://pixijs.com/) (WebGL), dans `src/render/`.
+Au lancement (`npm run dev` ou `npm run tauri dev`), le client affiche une grille de jeu vide.
+
+| Fichier               | Rôle                                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `PixiRenderer.ts`     | Moteur : possède l'application PixiJS, affiche une scène à la fois et la prévient des changements de taille |
+| `scenes/Scene.ts`     | Interface d'un écran (`view`, `resize`, `destroy`) : le moteur ne connaît que celle-ci                      |
+| `scenes/GameScene.ts` | Scène de la partie : dessine la grille                                                                      |
+| `GridLayout.ts`       | Géométrie de la grille, cases et pixels. Sans PixiJS, donc testable sans navigateur                         |
+
+```ts
+const renderer = await PixiRenderer.create(document.querySelector('#app'));
+renderer.setScene(new GameScene({ columns: 13, rows: 11 }));
+```
+
+Points à connaître :
+
+- La grille tient dans la fenêtre avec une marge, en cases de taille entière, centrée, et
+  elle est redessinée à chaque redimensionnement. `GridLayout` donne la position d'une case
+  (`cellOrigin`) et la case sous un point (`cellAt`) : les sprites s'en serviront pour se placer.
+- Repère : une case est repérée par sa colonne et sa ligne à partir de 0, en haut à gauche ;
+  les colonnes vont vers la droite, les lignes vers le bas. Les dimensions de la grille
+  (13 × 11, dans `main.ts`) et ce repère sont **provisoires** : le serveur ne les envoie pas
+  encore, ils sont à valider avec le Backend.
+- Le moteur ne connaît ni le réseau ni l'état du jeu (règle ESLint de `render/`) : les scènes
+  dessinent ce qu'on leur donne. La lecture de l'état viendra avec `GameState`.
+- `GridLayout` et `GameScene` se testent sans navigateur : les objets PixiJS fonctionnent sans
+  WebGL tant qu'on ne les affiche pas. `PixiRenderer` se teste avec une fausse application
+  PixiJS. Le rendu lui-même (couleurs, netteté) se contrôle à l'œil avec `npm run dev`.
+- Sans WebGL, PixiJS ne démarre pas et `main.ts` affiche un message d'erreur. PixiJS propose un
+  moteur de repli Canvas 2D (`preference: ['webgl', 'canvas']`), non activé pour l'instant.
+- Si la politique de sécurité (`csp`) de Tauri est activée plus tard, PixiJS exigera
+  `'unsafe-eval'` ou l'import de `pixi.js/unsafe-eval`, en plus de l'autorisation du WebSocket.
+- Vite n'utilise pas PostCSS (`css.postcss` dans `vite.config.ts`) : sinon il cherche sa
+  configuration jusqu'à la racine du dépôt, dont le `package.json` est vide, et le build échoue
+  dès qu'il y a du CSS.
+
 ## Architecture
 
 Le client est découpé en couches qui communiquent **uniquement** par le bus
