@@ -18,19 +18,24 @@ npm run dev
 
 ## Scripts
 
-| Script              | Rôle                                              |
-| ------------------- | ------------------------------------------------- |
-| `npm run dev`       | Serveur de développement Vite                     |
-| `npm run build`     | Vérification des types puis build de production    |
-| `npm run typecheck` | Vérification des types seule                      |
-| `npm test`          | Tests unitaires et d'intégration (Vitest)         |
-| `npm run lint`      | ESLint                                            |
-| `npm run format`    | Prettier                                          |
-| `npm run tauri dev`   | Lance l'application desktop (fenêtre Tauri)     |
-| `npm run tauri build` | Produit l'exécutable et les installeurs Windows  |
+| Script                 | Rôle                                               |
+| ---------------------- | -------------------------------------------------- |
+| `npm run dev`          | Serveur de développement Vite                      |
+| `npm run build`        | Vérification des types puis build de production    |
+| `npm run preview`      | Sert le build de production en local               |
+| `npm run typecheck`    | Vérification des types seule                       |
+| `npm test`             | Tests unitaires et d'intégration (Vitest)          |
+| `npm run lint`         | ESLint                                             |
+| `npm run format`       | Prettier : réécrit les fichiers                    |
+| `npm run format:check` | Prettier : vérifie le formatage sans rien modifier |
+| `npm run tauri dev`    | Lance l'application desktop (fenêtre Tauri)        |
+| `npm run tauri build`  | Produit l'exécutable et les installeurs Windows    |
 
-Ces quatre derniers scripts sont ceux attendus par le pipeline CI du pôle
-DevOps & Qualité (`.github/workflows/ci-cd-client.yml`).
+Les scripts `build`, `typecheck`, `lint`, `format:check` et `test` sont ceux
+attendus par le pipeline CI du pôle DevOps & Qualité
+(`.github/workflows/ci-cd-client.yml`, à venir). Les fins de ligne sont fixées
+à LF par `.gitattributes`, pour que `format:check` donne le même résultat sous
+Windows et sous Linux.
 
 ## Application desktop (Tauri)
 
@@ -53,10 +58,10 @@ npm run tauri build   # exécutable + installeurs (MSI, NSIS)
 Le premier `tauri build` compile toutes les dépendances Rust : compter plusieurs
 minutes. Les fichiers produits se trouvent dans `src-tauri/target/release/` :
 
-| Fichier                                   | Contenu                  |
-| ----------------------------------------- | ------------------------ |
-| `bomberman-arena.exe`                     | L'application            |
-| `bundle/msi/*.msi`, `bundle/nsis/*.exe`   | Les installeurs          |
+| Fichier                                 | Contenu         |
+| --------------------------------------- | --------------- |
+| `bomberman-arena.exe`                   | L'application   |
+| `bundle/msi/*.msi`, `bundle/nsis/*.exe` | Les installeurs |
 
 Points à connaître :
 
@@ -114,15 +119,15 @@ Le client est découpé en couches qui communiquent **uniquement** par le bus
 d'événements. Règle d'or : une couche publie sur le bus et s'abonne à ce qui
 l'intéresse, sans jamais appeler une autre couche directement.
 
-| Dossier        | Responsabilité                                                  |
-| -------------- | --------------------------------------------------------------- |
-| `src/core/`    | `EventBus` — publish/subscribe, aucune logique métier            |
+| Dossier        | Responsabilité                                                    |
+| -------------- | ----------------------------------------------------------------- |
+| `src/core/`    | `EventBus` — publish/subscribe, aucune logique métier             |
 | `src/network/` | Connexion WebSocket réelle ou simulée, derrière `IGameConnection` |
-| `src/state/`   | État local du jeu, alimenté par les événements serveur           |
-| `src/input/`   | Clavier/souris traduits en intentions de jeu                     |
-| `src/render/`  | Rendu PixiJS : lit l'état, dessine, ne le modifie jamais         |
-| `src/ui/`      | Menu, lobby, HUD                                                 |
-| `src/mocks/`   | Scénarios de parties rejoués hors ligne                          |
+| `src/state/`   | État local du jeu, alimenté par les événements serveur            |
+| `src/input/`   | Clavier/souris traduits en intentions de jeu                      |
+| `src/render/`  | Rendu PixiJS : lit l'état, dessine, ne le modifie jamais          |
+| `src/ui/`      | Menu, lobby, HUD                                                  |
+| `src/mocks/`   | Scénarios de parties rejoués hors ligne                           |
 
 Le client ne contient **aucune logique de jeu autoritaire** : collisions,
 validation des déplacements et calcul des explosions appartiennent au serveur.

@@ -1,0 +1,4 @@
+# Fichiers générés par Tauri et Cargo : ignorés par Git (src-tauri/.gitignore)
+# mais pas par Prettier, qui ne lit que le .gitignore du dossier courant.
+src-tauri/target
+src-tauri/gen
