@@ -1,12 +1,24 @@
+import { PixiRenderer } from './render/PixiRenderer';
+import { GameScene } from './render/scenes/GameScene';
+
 /**
  * Point d'entrée de l'application.
  *
- * Se limite pour l'instant à vérifier que la chaîne de build fonctionne.
- * L'assemblage des couches (App.ts, injection Mock vs WebSocket) arrive
- * dans une PR dédiée.
+ * Affiche pour l'instant une grille de jeu vide, ce qui vérifie la chaîne de rendu
+ * PixiJS. L'assemblage des couches (App.ts, injection Mock vs WebSocket) arrive dans
+ * une PR dédiée.
  */
-const app = document.querySelector<HTMLDivElement>('#app');
 
-if (app) {
-  app.textContent = 'Bomberman Arena — client';
+/** Provisoire : les dimensions de la grille viendront du serveur, à valider avec le Backend. */
+const DEMO_GRID = { columns: 13, rows: 11 };
+
+const host = document.querySelector<HTMLDivElement>('#app');
+
+if (host) {
+  PixiRenderer.create(host)
+    .then((renderer) => renderer.setScene(new GameScene(DEMO_GRID)))
+    .catch((error: unknown) => {
+      console.error("Impossible d'initialiser le rendu :", error);
+      host.textContent = "Impossible d'afficher le jeu : l'initialisation du rendu a échoué.";
+    });
 }
