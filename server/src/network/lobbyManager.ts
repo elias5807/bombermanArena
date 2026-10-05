@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
-import type { ServerMessage } from '../protocol/messages.js';
+import type { ServerMessage } from '@bomberman-area/shared';
 
 const MAX_PLAYERS = 4;
 

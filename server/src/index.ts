@@ -1,4 +1,4 @@
-import { startConnectionManager } from './connection/connectionManager.js';
+import { startConnectionManager } from './network/connectionManager.js';
  
 const PORT = 3000;
  

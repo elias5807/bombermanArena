@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import type { ClientMessage, ServerMessage } from '../protocol/messages.js';
-import { addPlayerToLobby, removePlayerFromLobby } from '../lobby/lobbyManager.js';
+import type { ClientMessage, ServerMessage } from '@bomberman-area/shared';
+import { addPlayerToLobby, removePlayerFromLobby } from './lobbyManager.js';
 
 export function startConnectionManager(port: number): WebSocketServer {
   const wss = new WebSocketServer({ port });

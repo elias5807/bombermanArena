@@ -1,5 +1,5 @@
 {
-  "name": "bomberman-arena-server",
+  "name": "@bomberman-area/server",
   "version": "0.1.0",
   "description": "Serveur backend de Bomberman Arena (moteur de jeu + WebSocket)",
   "main": "dist/index.js",
@@ -13,12 +13,10 @@
   },
   "dependencies": {
     "ws": "^8.21.3",
-    "wscat": "^6.1.0"
+    "@bomberman-area/shared": "0.1.0"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
     "@types/ws": "^8.18.1",
-    "typescript": "^5.5.0",
-    "vitest": "^5.0.0"
+    "wscat": "^6.1.0"
   }
 }
