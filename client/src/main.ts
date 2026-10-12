@@ -26,8 +26,12 @@ let renderer: PixiRenderer | null = null;
 let currentScene: GameScene | null = null;
 
 // Interactions Help Panel
-function showHelp() { helpPanel.classList.remove('hidden'); }
-function hideHelp() { helpPanel.classList.add('hidden'); }
+function showHelp() {
+  helpPanel.classList.remove('hidden');
+}
+function hideHelp() {
+  helpPanel.classList.add('hidden');
+}
 btnShowHelpLogin.addEventListener('click', showHelp);
 btnShowHelpGame.addEventListener('click', showHelp);
 btnCloseHelp.addEventListener('click', hideHelp);
@@ -36,7 +40,7 @@ btnCloseHelp.addEventListener('click', hideHelp);
 btnLogin.addEventListener('click', () => {
   const pseudo = pseudoInput.value.trim() || 'VoleurInconnu';
   lobbyMyName.textContent = `P1: ${pseudo}`; // Met à jour le nom dans le lobby
-  
+
   // Transition vers la salle d'attente
   loginScreen.classList.add('hidden');
   lobbyScreen.classList.remove('hidden');
