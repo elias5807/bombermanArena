@@ -3,7 +3,6 @@ import { GameScene } from './render/scenes/GameScene';
 import './style.css';
 
 const DEMO_GRID = { columns: 15, rows: 13 };
-const MATCH_DURATION = 120; // 2 minutes par match
 
 // DOM Elements
 const loginScreen = document.getElementById('login-screen') as HTMLElement;
