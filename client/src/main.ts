@@ -3,6 +3,18 @@ import { GameScene } from './render/scenes/GameScene';
 import { loadSprites } from './render/sprites/loadSprites';
 import './style.css';
 
+/**
+ * Point d'entrée de l'application.
+ *
+ * Enchaîne les écrans décrits dans `index.html` (connexion, salle d'attente, partie, aide).
+ * Au lancement de la partie, démarre le rendu PixiJS, charge les sprites, puis affiche
+ * `GameScene` et lui transmet les touches du clavier.
+ *
+ * Provisoire : rien ne passe encore par le bus d'événements ni par le réseau. L'assemblage
+ * des couches (App.ts, connexion simulée ou WebSocket) arrive dans une PR dédiée.
+ */
+
+/** Provisoire : les dimensions de la grille viendront du serveur, à valider avec le Backend. */
 const DEMO_GRID = { columns: 15, rows: 13 };
 
 // DOM Elements

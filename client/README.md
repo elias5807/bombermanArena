@@ -10,11 +10,17 @@ Le serveur est dans `../server` et n'est pas nécessaire pour lancer le client
 
 ## Démarrer
 
+Le client est un workspace npm du dépôt : ses dépendances s'installent à la **racine**,
+ses scripts se lancent depuis `client/`.
+
 ```bash
+npm ci          # à la racine du dépôt
 cd client
-npm install
 npm run dev
 ```
+
+Un `npm install` lancé dans `client/` n'installe pas les outils communs (TypeScript, ESLint,
+Vitest, Prettier), déclarés à la racine : les scripts échouent alors faute de `tsc`.
 
 ## Scripts
 
@@ -79,16 +85,17 @@ Points à connaître :
 L'affichage est dessiné avec [PixiJS 8](https://pixijs.com/) (WebGL), dans `src/render/`.
 Au lancement (`npm run dev` ou `npm run tauri dev`), le client affiche une grille de jeu vide.
 
-| Fichier               | Rôle                                                                                                        |
-| --------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `PixiRenderer.ts`     | Moteur : possède l'application PixiJS, affiche une scène à la fois et la prévient des changements de taille |
-| `scenes/Scene.ts`     | Interface d'un écran (`view`, `resize`, `destroy`) : le moteur ne connaît que celle-ci                      |
-| `scenes/GameScene.ts` | Scène de la partie : dessine la grille                                                                      |
-| `GridLayout.ts`       | Géométrie de la grille, cases et pixels. Sans PixiJS, donc testable sans navigateur                         |
+| Fichier                  | Rôle                                                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `PixiRenderer.ts`        | Moteur : possède l'application PixiJS, affiche une scène à la fois et la prévient des changements de taille |
+| `scenes/Scene.ts`        | Interface d'un écran (`view`, `resize`, `destroy`) : le moteur ne connaît que celle-ci                      |
+| `scenes/GameScene.ts`    | Scène de la partie : dessine la grille                                                                      |
+| `sprites/loadSprites.ts` | Charge les images de `public/assets/sprites/` et rend les textures que la scène dessine                     |
+| `GridLayout.ts`          | Géométrie de la grille, cases et pixels. Sans PixiJS, donc testable sans navigateur                         |
 
 ```ts
 const renderer = await PixiRenderer.create(document.querySelector('#app'));
-renderer.setScene(new GameScene({ columns: 13, rows: 11 }));
+renderer.setScene(new GameScene({ columns: 15, rows: 13 }, await loadSprites()));
 ```
 
 Points à connaître :
@@ -103,8 +110,10 @@ Points à connaître :
 - Le moteur ne connaît ni le réseau ni l'état du jeu (règle ESLint de `render/`) : les scènes
   dessinent ce qu'on leur donne. La lecture de l'état viendra avec `GameState`.
 - `GridLayout` et `GameScene` se testent sans navigateur : les objets PixiJS fonctionnent sans
-  WebGL tant qu'on ne les affiche pas. `PixiRenderer` se teste avec une fausse application
-  PixiJS. Le rendu lui-même (couleurs, netteté) se contrôle à l'œil avec `npm run dev`.
+  WebGL tant qu'on ne les affiche pas. Les images, elles, ne se chargent que dans un navigateur :
+  `GameScene` reçoit donc ses textures de `loadSprites`, et les tests lui en donnent des vides.
+  `PixiRenderer` se teste avec une fausse application PixiJS. Le rendu lui-même (couleurs,
+  netteté) se contrôle à l'œil avec `npm run dev`.
 - Sans WebGL, PixiJS ne démarre pas et `main.ts` affiche un message d'erreur. PixiJS propose un
   moteur de repli Canvas 2D (`preference: ['webgl', 'canvas']`), non activé pour l'instant.
 - Si la politique de sécurité (`csp`) de Tauri est activée plus tard, PixiJS exigera
