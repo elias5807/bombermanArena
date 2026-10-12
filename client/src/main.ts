@@ -2,21 +2,28 @@ import { PixiRenderer } from './render/PixiRenderer';
 import { GameScene } from './render/scenes/GameScene';
 
 /**
- * Point d'entrée de l'application.
- *
- * Affiche pour l'instant une grille de jeu vide, ce qui vérifie la chaîne de rendu
- * PixiJS. L'assemblage des couches (App.ts, injection Mock vs WebSocket) arrive dans
- * une PR dédiée.
+ * Point d'entrée de l'application (branche feature/sprites).
+ * Affiche la grille de jeu avec les sprites PixiJS et permet de tester
+ * le déplacement du personnage et la pose de bombes via le clavier.
  */
-
-/** Provisoire : les dimensions de la grille viendront du serveur, à valider avec le Backend. */
-const DEMO_GRID = { columns: 13, rows: 11 };
+const DEMO_GRID = { columns: 15, rows: 13 };
 
 const host = document.querySelector<HTMLDivElement>('#app');
 
 if (host) {
   PixiRenderer.create(host)
-    .then((renderer) => renderer.setScene(new GameScene(DEMO_GRID)))
+    .then((renderer) => {
+      const scene = new GameScene(DEMO_GRID);
+      renderer.setScene(scene);
+
+      // Gestion des contrôles clavier pour tester les sprites en jeu
+      window.addEventListener('keydown', (e) => {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+          e.preventDefault();
+          scene.handleInput(e.key);
+        }
+      });
+    })
     .catch((error: unknown) => {
       console.error("Impossible d'initialiser le rendu :", error);
       host.textContent = "Impossible d'afficher le jeu : l'initialisation du rendu a échoué.";
