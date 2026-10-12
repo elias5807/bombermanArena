@@ -9,200 +9,148 @@
   <body>
     <div class="layout-container">
       <div class="left-column">
-        <!-- Écran de Connexion -->
-        <div id="login-screen" class="panel kraft-folder active">
+        <!-- Écran de Connexion / Dossier de mission -->
+        <div id="login-screen" class="panel kraft-folder">
           <div class="login-sprites-banner">
-            <img
-              src="/assets/sprites/joueur_1.png"
-              alt="Braqueur Jaune"
-              class="character-preview"
-            />
-            <img src="/assets/sprites/joueur_2.png" alt="Braqueur Bleu" class="character-preview" />
-            <img
-              src="/assets/sprites/joueur_3.png"
-              alt="Braqueur Rouge"
-              class="character-preview"
-            />
-            <img src="/assets/sprites/joueur_4.png" alt="Braqueur Vert" class="character-preview" />
+            <img src="/assets/sprites/joueur_1.png" class="character-preview" alt="P1" />
+            <img src="/assets/sprites/joueur_2.png" class="character-preview" alt="P2" />
+            <img src="/assets/sprites/joueur_3.png" class="character-preview" alt="P3" />
+            <img src="/assets/sprites/joueur_4.png" class="character-preview" alt="P4" />
           </div>
-          <h1>BOMBERMAN ARENA</h1>
-          <h2>LE CASSE DU SIÈCLE</h2>
+          <h1>BOMBERMAN<br />ARENA</h1>
+          <h2>Dossier de mission</h2>
           <div class="form-group">
-            <label for="pseudo-input">Identifiant Voleur :</label>
-            <input type="text" id="pseudo-input" placeholder="Ton pseudo..." autocomplete="off" />
+            <label for="pseudo-input">Nom de code (Pseudo) :</label>
+            <input
+              type="text"
+              id="pseudo-input"
+              placeholder="Ex: Agent007"
+              maxlength="15"
+              autocomplete="off"
+            />
           </div>
-          <button id="btn-login" class="btn primary">OUVRIR LE COFFRE (ENTRER)</button>
-          <button id="btn-show-help-login" class="btn secondary">DÉCOUVRIR COMMENT JOUER</button>
+          <button id="btn-login" class="btn primary">Rejoindre la salle d'attente</button>
+          <button id="btn-show-help-login" class="btn secondary">Instructions de jeu</button>
         </div>
 
-        <!-- Écran de Salle d'Attente (Lobby) -->
-        <div id="lobby-screen" class="panel vault-tech lobby-container hidden">
-          <h2 class="lobby-title">PRÉPARATION DU BRAQUAGE</h2>
+        <!-- Écran de Lobby / Salle d'attente -->
+        <div id="lobby-screen" class="panel lobby-container hidden">
+          <div class="lobby-title">Salle d'attente</div>
           <div class="lobby-box">
-            <h3>ÉQUIPE DE CHOC (4/4)</h3>
+            <h3>Agents connectés (4 max)</h3>
             <ul class="lobby-players">
               <li class="lobby-player ready">
-                <img src="/assets/sprites/joueur_1.png" alt="P1" class="pixel-avatar" />
-                <span id="lobby-my-name">P1: Vous</span>
+                <img src="/assets/sprites/joueur_1.png" class="pixel-avatar" alt="P1" />
+                <span id="lobby-my-name">P1: Prêt</span>
                 <span class="status">PRÊT</span>
               </li>
               <li class="lobby-player ready">
-                <img src="/assets/sprites/joueur_2.png" alt="P2" class="pixel-avatar" />
-                <span>P2: BraqueurX</span>
+                <img src="/assets/sprites/joueur_2.png" class="pixel-avatar" alt="P2" />
+                <span>P2: Bot Alpha</span>
                 <span class="status">PRÊT</span>
               </li>
               <li class="lobby-player ready">
-                <img src="/assets/sprites/joueur_3.png" alt="P3" class="pixel-avatar" />
-                <span>P3: Ennemi3</span>
+                <img src="/assets/sprites/joueur_3.png" class="pixel-avatar" alt="P3" />
+                <span>P3: Bot Beta</span>
                 <span class="status">PRÊT</span>
               </li>
               <li class="lobby-player ready">
-                <img src="/assets/sprites/joueur_4.png" alt="P4" class="pixel-avatar" />
-                <span>P4: Ennemi4</span>
+                <img src="/assets/sprites/joueur_4.png" class="pixel-avatar" alt="P4" />
+                <span>P4: Bot Gamma</span>
                 <span class="status">PRÊT</span>
               </li>
             </ul>
           </div>
           <div class="lobby-actions">
-            <button id="btn-start-game" class="btn primary">LANCER LE CASSE !</button>
-            <button id="btn-leave-lobby" class="btn danger">RETOUR</button>
+            <button id="btn-leave-lobby" class="btn secondary">Retour au login</button>
+            <button id="btn-start-game" class="btn primary">Lancer la partie</button>
           </div>
         </div>
 
-        <!-- Zone de Jeu & HUD -->
+        <!-- Écran de Jeu / Vault Tech HUD -->
         <div id="game-screen" class="panel vault-tech hidden">
           <div class="hud-left">
-            <div class="timer" id="game-timer">02:00</div>
+            <div class="timer">02:45</div>
             <div class="player-list">
-              <div class="player-item p1" id="hud-player-p1">
+              <div class="player-item p1">
                 <div class="player-info">
-                  <img src="/assets/sprites/joueur_1.png" alt="P1" class="hud-avatar" />
-                  <span class="player-name" id="hud-name-p1">P1: Vous</span>
+                  <img src="/assets/sprites/joueur_1.png" class="hud-avatar" alt="P1" />
+                  <span class="player-name">P1 (Vous)</span>
                 </div>
-                <span class="player-score" id="hud-score-p1">00000</span>
+                <div class="player-score">Vies: 3</div>
               </div>
-              <div class="player-item p2" id="hud-player-p2">
+              <div class="player-item p2">
                 <div class="player-info">
-                  <img src="/assets/sprites/joueur_2.png" alt="P2" class="hud-avatar" />
-                  <span class="player-name" id="hud-name-p2">P2: BraqueurX</span>
+                  <img src="/assets/sprites/joueur_2.png" class="hud-avatar" alt="P2" />
+                  <span class="player-name">P2</span>
                 </div>
-                <span class="player-score" id="hud-score-p2">00000</span>
+                <div class="player-score">Vies: 3</div>
               </div>
-              <div class="player-item p3" id="hud-player-p3">
+              <div class="player-item p3">
                 <div class="player-info">
-                  <img src="/assets/sprites/joueur_3.png" alt="P3" class="hud-avatar" />
-                  <span class="player-name" id="hud-name-p3">P3: Ennemi3</span>
+                  <img src="/assets/sprites/joueur_3.png" class="hud-avatar" alt="P3" />
+                  <span class="player-name">P3</span>
                 </div>
-                <span class="player-score" id="hud-score-p3">00000</span>
+                <div class="player-score">Vies: 3</div>
               </div>
-              <div class="player-item p4" id="hud-player-p4">
+              <div class="player-item p4">
                 <div class="player-info">
-                  <img src="/assets/sprites/joueur_4.png" alt="P4" class="hud-avatar" />
-                  <span class="player-name" id="hud-name-p4">P4: Ennemi4</span>
+                  <img src="/assets/sprites/joueur_4.png" class="hud-avatar" alt="P4" />
+                  <span class="player-name">P4</span>
                 </div>
-                <span class="player-score" id="hud-score-p4">00000</span>
+                <div class="player-score">Vies: 3</div>
               </div>
             </div>
           </div>
-          <div class="game-center" id="canvas-container">
-            <!-- Le canvas PixiJS sera injecté ici -->
-          </div>
+
+          <div id="canvas-container" class="game-center"></div>
+
           <div class="hud-right">
             <div class="logo-mini">BOMBERMAN<br />ARENA</div>
-            <button id="btn-quit" class="btn danger" style="margin-top: auto">QUITTER</button>
             <button id="btn-show-help-game" class="btn round-help">?</button>
+            <button id="btn-quit" class="btn danger">Quitter</button>
           </div>
         </div>
       </div>
 
-      <!-- Panneau "Comment Jouer" -->
-      <div id="help-panel" class="right-column panel steel-door hidden">
-        <button id="btn-close-help" class="btn close-x">X</button>
-        <h2>Comment Jouer ?</h2>
+      <!-- Panneau latéral d'aide / Manuel tactique -->
+      <div id="help-panel" class="right-column steel-door hidden">
+        <button id="btn-close-help" class="btn close-x">✕</button>
+        <h2>Manuel tactique</h2>
         <div class="help-content">
-          <p>
-            Le but du jeu est simple : vous êtes un braqueur et vous devez récupérer le maximum
-            d'argent avant les autres !
-          </p>
-          <p>
-            Détruisez les murs en brique avec vos dynamites, ramassez les bonus et éliminez la
-            concurrence.
-          </p>
+          <p>Déplacez votre agent dans l'arène et éliminez vos rivaux à l'aide de bombes.</p>
 
           <div class="sprites-legend">
             <div class="legend-row">
-              <img
-                src="/assets/sprites/mur_cassable.png"
-                alt="Mur cassable"
-                class="legend-sprite"
-              />
-              <span
-                ><strong>Briques (+50 pts) :</strong> Détruisez-les pour vous frayer un
-                chemin.</span
-              >
+              <img src="/assets/sprites/sol.png" class="legend-sprite" alt="Sol" />
+              <span>Sol praticable</span>
             </div>
             <div class="legend-row">
-              <img
-                src="/assets/sprites/mur_incassable.png"
-                alt="Mur blindé"
-                class="legend-sprite"
-              />
-              <span><strong>Piliers :</strong> Blindés et indestructibles.</span>
+              <img src="/assets/sprites/mur_incassable.png" class="legend-sprite" alt="Mur" />
+              <span>Mur incassable</span>
             </div>
             <div class="legend-row">
-              <img src="/assets/sprites/bombe_poser.png" alt="Bombe posée" class="legend-sprite" />
-              <img
-                src="/assets/sprites/bombe_qui_va_esploser.png"
-                alt="Bombe prête"
-                class="legend-sprite"
-              />
-              <span><strong>Bombes :</strong> Déposées avec ESPACE.</span>
+              <img src="/assets/sprites/mur_cassable.png" class="legend-sprite" alt="Brique" />
+              <span>Brique destructible</span>
             </div>
             <div class="legend-row">
-              <img src="/assets/sprites/explosion.png" alt="Explosion" class="legend-sprite" />
-              <span><strong>Déflagration (+200 pts) :</strong> Éliminez vos rivaux !</span>
+              <img src="/assets/sprites/bombe_poser.png" class="legend-sprite" alt="Bombe" />
+              <span>Bombe / Explosif</span>
+            </div>
+            <div class="legend-row">
+              <img src="/assets/sprites/explosion.png" class="legend-sprite" alt="Explosion" />
+              <span>Souffle mortel</span>
             </div>
           </div>
 
           <div class="controls-box">
-            <p><strong>DÉPLACEMENTS</strong></p>
-            <div><span class="key">↑</span></div>
-            <div>
-              <span class="key">←</span><span class="key">↓</span><span class="key">→</span>
-            </div>
-            <p style="margin-top: 15px"><strong>ACTION</strong></p>
-            <span class="key" style="padding: 5px 40px">ESPACE</span>
-            <p style="font-size: 0.8rem; margin-top: 5px; color: #ccc">Déposer une bombe</p>
+            <strong>Commandes :</strong><br /><br />
+            <span class="key">▲</span> <span class="key">▼</span> <span class="key">◄</span> <span class="key">►</span> : Se déplacer<br /><br />
+            <span class="key">Espace</span> : Poser une bombe
           </div>
         </div>
       </div>
     </div>
-
-    <!-- Fenêtre Modale de Fin de Partie (Game Over / Victoire) -->
-    <div id="game-over-modal" class="modal-overlay hidden">
-      <div class="modal-card">
-        <div id="game-over-badge" class="modal-badge">🏆</div>
-        <h2 id="game-over-title">CASSE RÉUSSI !</h2>
-        <p id="game-over-desc">Vous avez éliminé toute concurrence et emporté le butin !</p>
-
-        <div class="modal-stats">
-          <div class="stat-pill">
-            <span class="stat-label">SCORE FINAL</span>
-            <span id="final-score" class="stat-num">00000</span>
-          </div>
-          <div class="stat-pill">
-            <span class="stat-label">TEMPS ÉCOULÉ</span>
-            <span id="final-time" class="stat-num">00:00</span>
-          </div>
-        </div>
-
-        <div class="modal-btn-row">
-          <button id="btn-replay" class="btn primary">NOUVEAU CASSE (REJOUER)</button>
-          <button id="btn-modal-lobby" class="btn secondary">RETOUR AU LOBBY</button>
-        </div>
-      </div>
-    </div>
-
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

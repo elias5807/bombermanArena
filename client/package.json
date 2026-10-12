@@ -11,6 +11,7 @@
     "test": "vitest run",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "tauri": "tauri"
   },
   "dependencies": {
