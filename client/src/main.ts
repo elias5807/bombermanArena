@@ -1,5 +1,6 @@
 import { PixiRenderer } from './render/PixiRenderer';
 import { GameScene } from './render/scenes/GameScene';
+import { loadSprites } from './render/sprites/loadSprites';
 import './style.css';
 
 const DEMO_GRID = { columns: 15, rows: 13 };
@@ -63,10 +64,10 @@ btnStartGame.addEventListener('click', () => {
   // Initialisation du moteur de jeu
   if (!renderer && canvasContainer) {
     PixiRenderer.create(canvasContainer)
-      .then((r) => {
+      .then(async (r) => {
         renderer = r;
-        currentScene = new GameScene(DEMO_GRID);
-        renderer.setScene(currentScene);
+        currentScene = new GameScene(DEMO_GRID, await loadSprites());
+        r.setScene(currentScene);
       })
       .catch((error: unknown) => {
         console.error("Impossible d'initialiser le rendu :", error);
