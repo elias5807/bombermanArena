@@ -6,54 +6,119 @@ const MARGIN = 16;
 const BORDER_COLOR = 0x111315;
 const BORDER_WIDTH = 4;
 
+export interface PlayerState {
+  id: string;
+  name: string;
+  r: number;
+  c: number;
+  alive: boolean;
+  score: number;
+  textureKey: string;
+}
+
+export interface GameCallbacks {
+  onScoreUpdate?: (scores: { id: string; score: number }[]) => void;
+  onPlayerEliminated?: (playerId: string) => void;
+  onGameOver?: (result: { winner: PlayerState | null; isVictory: boolean; reason: string }) => void;
+}
+
 export class GameScene implements Scene {
   readonly view = new Container();
 
   private readonly grid: GridSize;
   private readonly border = new Graphics();
-  
-  // Containers pour organiser l'ordre d'affichage (z-index)
+
+  // Ordre d'affichage (z-index)
   private readonly floorLayer = new Container();
   private readonly wallsLayer = new Container();
   private readonly entitiesLayer = new Container();
-  
+
   private currentLayout: GridLayout | undefined;
 
   // 0 = vide, 1 = incassable, 2 = cassable
   private map: number[][] = [];
-  
-  // Positions des 4 joueurs (1 dans chaque coin)
-  private player = { r: 1, c: 1 };
-  private player2 = { r: 1, c: 13 };
-  private player3 = { r: 11, c: 1 };
-  private player4 = { r: 11, c: 13 };
 
-  private bombs: { r: number; c: number; ticking: boolean }[] = [];
+  // Liste des 4 joueurs
+  public players: PlayerState[] = [];
+
+  private bombs: { r: number; c: number; ownerId: string; ticking: boolean }[] = [];
   private explosions: { r: number; c: number }[] = [];
 
   // Textures des sprites individuels chargés
   private texturesReady = false;
   private textures: Record<string, Texture> = {};
 
-  constructor(grid: GridSize) {
+  private callbacks: GameCallbacks | undefined;
+  private isGameOver = false;
+  private botInterval: number | null = null;
+
+  constructor(grid: GridSize, callbacks?: GameCallbacks, initialPlayerName: string = 'Vous') {
     this.grid = grid;
-    
-    // Ordre d'affichage : Sol < Murs < Entités < Bordure
+    this.callbacks = callbacks;
+
     this.view.addChild(this.floorLayer);
     this.view.addChild(this.wallsLayer);
     this.view.addChild(this.entitiesLayer);
     this.view.addChild(this.border);
 
+    this.initPlayers(initialPlayerName);
     this.generateMap();
     this.loadSprites();
   }
 
+  private initPlayers(p1Name: string) {
+    this.players = [
+      { id: 'p1', name: p1Name, r: 1, c: 1, alive: true, score: 0, textureKey: 'player1' },
+      {
+        id: 'p2',
+        name: 'BraqueurX',
+        r: 1,
+        c: this.grid.columns - 2,
+        alive: true,
+        score: 0,
+        textureKey: 'player2',
+      },
+      {
+        id: 'p3',
+        name: 'Ennemi3',
+        r: this.grid.rows - 2,
+        c: 1,
+        alive: true,
+        score: 0,
+        textureKey: 'player3',
+      },
+      {
+        id: 'p4',
+        name: 'Ennemi4',
+        r: this.grid.rows - 2,
+        c: this.grid.columns - 2,
+        alive: true,
+        score: 0,
+        textureKey: 'player4',
+      },
+    ];
+  }
+
   /**
    * Charge tous les sprites séparés depuis /assets/sprites/
-   * Plus aucun découpage manuel de spritesheet n'est nécessaire.
    */
   private async loadSprites() {
-    const [
+    const [floor, wall, brick, bomb, bombTicking, explosion, player1, player2, player3, player4] =
+      await Promise.all([
+        Assets.load<Texture>('/assets/sprites/sol.png'),
+        Assets.load<Texture>('/assets/sprites/mur_incassable.png'),
+        Assets.load<Texture>('/assets/sprites/mur_cassable.png'),
+        Assets.load<Texture>('/assets/sprites/bombe_poser.png'),
+        Assets.load<Texture>('/assets/sprites/bombe_qui_va_esploser.png'),
+        Assets.load<Texture>('/assets/sprites/explosion.png'),
+        Assets.load<Texture>('/assets/sprites/joueur_1.png'),
+        Assets.load<Texture>('/assets/sprites/joueur_2.png'),
+        Assets.load<Texture>('/assets/sprites/joueur_3.png'),
+        Assets.load<Texture>('/assets/sprites/joueur_4.png'),
+      ]);
+
+    // Rendu pixel art net
+    const all = [
       floor,
       wall,
       brick,
@@ -64,21 +129,7 @@ export class GameScene implements Scene {
       player2,
       player3,
       player4,
-    ] = await Promise.all([
-      Assets.load<Texture>('/assets/sprites/sol.png'),
-      Assets.load<Texture>('/assets/sprites/mur_incassable.png'),
-      Assets.load<Texture>('/assets/sprites/mur_cassable.png'),
-      Assets.load<Texture>('/assets/sprites/bombe_poser.png'),
-      Assets.load<Texture>('/assets/sprites/bombe_qui_va_esploser.png'),
-      Assets.load<Texture>('/assets/sprites/explosion.png'),
-      Assets.load<Texture>('/assets/sprites/joueur_1.png'),
-      Assets.load<Texture>('/assets/sprites/joueur_2.png'),
-      Assets.load<Texture>('/assets/sprites/joueur_3.png'),
-      Assets.load<Texture>('/assets/sprites/joueur_4.png'),
-    ]);
-
-    // Conserver le pixel art net sans flou de redimensionnement
-    const all = [floor, wall, brick, bomb, bombTicking, explosion, player1, player2, player3, player4];
+    ];
     for (const tex of all) {
       if (tex?.source) {
         tex.source.scaleMode = 'nearest';
@@ -98,10 +149,12 @@ export class GameScene implements Scene {
 
     this.texturesReady = true;
 
-    // Forcer le rendu si le layout est déjà initialisé
     if (this.currentLayout) {
       this.drawAll();
     }
+
+    // Démarrage de l'IA autonome pour les 3 rivaux
+    this.startBotAI();
   }
 
   private generateMap() {
@@ -109,18 +162,18 @@ export class GameScene implements Scene {
       this.map[r] = [];
       for (let c = 0; c < this.grid.columns; c++) {
         if (r === 0 || r === this.grid.rows - 1 || c === 0 || c === this.grid.columns - 1) {
-          this.map[r][c] = 1; // Bordures extérieures
+          this.map[r][c] = 1; // Bordures
         } else if (r % 2 === 0 && c % 2 === 0) {
-          this.map[r][c] = 1; // Piliers fixes
+          this.map[r][c] = 1; // Piliers
         } else {
-          // Zones de spawn dégagées pour les 4 joueurs dans les coins
+          // Zones de spawn dégagées dans les 4 coins
           const isP1Spawn = r < 3 && c < 3;
           const isP2Spawn = r < 3 && c >= this.grid.columns - 3;
           const isP3Spawn = r >= this.grid.rows - 3 && c < 3;
           const isP4Spawn = r >= this.grid.rows - 3 && c >= this.grid.columns - 3;
 
           if (!isP1Spawn && !isP2Spawn && !isP3Spawn && !isP4Spawn && Math.random() < 0.35) {
-            this.map[r][c] = 2; // Mur destructible
+            this.map[r][c] = 2; // Bloc cassable
           } else {
             this.map[r][c] = 0; // Sol vide
           }
@@ -129,47 +182,112 @@ export class GameScene implements Scene {
     }
   }
 
+  /**
+   * Intelligence Artificielle simple pour animer les rivaux P2, P3, P4
+   */
+  private startBotAI() {
+    if (this.botInterval) clearInterval(this.botInterval);
+    this.botInterval = window.setInterval(() => {
+      if (this.isGameOver || !this.texturesReady) return;
+      this.updateBots();
+    }, 750);
+  }
+
+  private updateBots() {
+    const dirs = [
+      { dr: -1, dc: 0 },
+      { dr: 1, dc: 0 },
+      { dr: 0, dc: -1 },
+      { dr: 0, dc: 1 },
+    ];
+
+    for (let i = 1; i < this.players.length; i++) {
+      const bot = this.players[i];
+      if (!bot.alive) continue;
+
+      // Déplacements possibles
+      const valid = dirs.filter((d) => {
+        const nr = bot.r + d.dr;
+        const nc = bot.c + d.dc;
+        if (nr < 0 || nr >= this.grid.rows || nc < 0 || nc >= this.grid.columns) return false;
+        if (this.map[nr][nc] !== 0) return false;
+        if (this.bombs.some((b) => b.r === nr && b.c === nc)) return false;
+        return true;
+      });
+
+      if (valid.length > 0) {
+        const choice = valid[Math.floor(Math.random() * valid.length)];
+        bot.r += choice.dr;
+        bot.c += choice.dc;
+      }
+
+      // Possibilité de poser une bombe si adjacent à une brique cassable
+      const nearBrick = dirs.some((d) => {
+        const nr = bot.r + d.dr;
+        const nc = bot.c + d.dc;
+        return (
+          nr >= 0 &&
+          nr < this.grid.rows &&
+          nc >= 0 &&
+          nc < this.grid.columns &&
+          this.map[nr][nc] === 2
+        );
+      });
+
+      if (nearBrick && Math.random() < 0.2) {
+        this.placeBomb(bot);
+      }
+    }
+
+    this.redrawEntities();
+  }
+
   public handleInput(key: string) {
-    if (!this.texturesReady) return;
+    if (!this.texturesReady || this.isGameOver) return;
+
+    const p1 = this.players[0];
+    if (!p1 || !p1.alive) return;
 
     let dc = 0;
     let dr = 0;
-    
+
     if (key === 'ArrowUp') dr = -1;
     else if (key === 'ArrowDown') dr = 1;
     else if (key === 'ArrowLeft') dc = -1;
     else if (key === 'ArrowRight') dc = 1;
     else if (key === ' ') {
-      this.placeBomb();
+      this.placeBomb(p1);
       return;
     }
-    
+
     if (dr !== 0 || dc !== 0) {
-      const nr = this.player.r + dr;
-      const nc = this.player.c + dc;
-      
+      const nr = p1.r + dr;
+      const nc = p1.c + dc;
+
       if (nr >= 0 && nr < this.grid.rows && nc >= 0 && nc < this.grid.columns) {
-        const isBomb = this.bombs.some(b => b.r === nr && b.c === nc);
+        const isBomb = this.bombs.some((b) => b.r === nr && b.c === nc);
         if (this.map[nr][nc] === 0 && !isBomb) {
-          this.player.r = nr;
-          this.player.c = nc;
+          p1.r = nr;
+          p1.c = nc;
           this.redrawEntities();
         }
       }
     }
   }
 
-  private placeBomb() {
-    const exists = this.bombs.find(b => b.r === this.player.r && b.c === this.player.c);
+  public placeBomb(player: PlayerState) {
+    if (!player.alive || this.isGameOver) return;
+
+    const exists = this.bombs.find((b) => b.r === player.r && b.c === player.c);
     if (exists) return;
-    
-    const r = this.player.r;
-    const c = this.player.c;
-    const bomb = { r, c, ticking: false };
+
+    const r = player.r;
+    const c = player.c;
+    const bomb = { r, c, ownerId: player.id, ticking: false };
     this.bombs.push(bomb);
     this.redrawEntities();
-    
-    // Après 1.5s, la bombe s'anime (sprite bombe qui va exploser)
+
+    // Mèche qui clignote après 1.5s
     setTimeout(() => {
       bomb.ticking = true;
       this.redrawEntities();
@@ -177,43 +295,140 @@ export class GameScene implements Scene {
 
     // Détonation après 2.5s
     setTimeout(() => {
-      this.bombs = this.bombs.filter(b => b !== bomb);
-      this.explode(r, c);
+      this.bombs = this.bombs.filter((b) => b !== bomb);
+      this.explode(r, c, player.id);
       this.redrawEntities();
     }, 2500);
   }
 
-  private explode(r: number, c: number) {
-    const dirs = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]];
+  private explode(r: number, c: number, ownerId: string) {
+    if (this.isGameOver) return;
+
+    const dirs = [
+      [0, 0],
+      [0, 1],
+      [0, -1],
+      [1, 0],
+      [-1, 0],
+    ];
     const newExplosions: { r: number; c: number }[] = [];
+    const owner = this.players.find((p) => p.id === ownerId);
 
     for (const d of dirs) {
       const nr = r + d[0];
       const nc = c + d[1];
       if (nr >= 0 && nr < this.grid.rows && nc >= 0 && nc < this.grid.columns) {
         if (this.map[nr][nc] === 1) {
-          // Mur incassable bloque l'explosion
+          // Bloqué par mur incassable
           continue;
         }
         if (this.map[nr][nc] === 2) {
-          this.map[nr][nc] = 0; // Détruit la brique cassable
+          this.map[nr][nc] = 0; // Détruit la brique
+          if (owner) {
+            owner.score += 50; // +50 pts par bloc détruit
+          }
         }
         newExplosions.push({ r: nr, c: nc });
+
+        // Vérifier les joueurs touchés par le souffle
+        for (const p of this.players) {
+          if (p.alive && p.r === nr && p.c === nc) {
+            p.alive = false;
+            if (owner && owner.id !== p.id) {
+              owner.score += 200; // +200 pts bonus d'élimination
+            }
+            this.callbacks?.onPlayerEliminated?.(p.id);
+          }
+        }
       }
     }
 
+    this.callbacks?.onScoreUpdate?.(this.players.map((p) => ({ id: p.id, score: p.score })));
+
     this.explosions.push(...newExplosions);
-    
+
     if (this.currentLayout) {
       this.drawWalls(this.currentLayout);
     }
     this.redrawEntities();
 
-    // Disparition de l'explosion après 400ms
+    // Disparition du souffle après 400ms
     setTimeout(() => {
-      this.explosions = this.explosions.filter(exp => !newExplosions.includes(exp));
+      this.explosions = this.explosions.filter((exp) => !newExplosions.includes(exp));
       this.redrawEntities();
     }, 400);
+
+    this.checkGameConditions();
+  }
+
+  /**
+   * Vérifie les conditions de victoire ou d'élimination
+   */
+  private checkGameConditions() {
+    if (this.isGameOver) return;
+
+    const p1 = this.players[0];
+    const rivalsAlive = this.players.slice(1).filter((p) => p.alive);
+
+    // Défaite si P1 est mort
+    if (!p1.alive) {
+      this.endGame(null, false, "Vous avez succombé au souffle d'une bombe !");
+      return;
+    }
+
+    // Victoire si tous les autres rivaux sont morts
+    if (rivalsAlive.length === 0) {
+      this.endGame(p1, true, 'Braquage réussi ! Tous vos rivaux ont été éliminés !');
+      return;
+    }
+  }
+
+  public timeOut() {
+    if (this.isGameOver) return;
+
+    // Fin du chrono : le joueur en vie avec le plus de score gagne
+    const alivePlayers = this.players.filter((p) => p.alive);
+    if (alivePlayers.length === 0) {
+      this.endGame(null, false, 'Temps écoulé ! Aucun survivant.');
+      return;
+    }
+
+    alivePlayers.sort((a, b) => b.score - a.score);
+    const winner = alivePlayers[0];
+    const isP1Winner = winner.id === 'p1';
+
+    this.endGame(
+      winner,
+      isP1Winner,
+      isP1Winner
+        ? `Temps écoulé ! Vous remportez le butin avec ${winner.score} points !`
+        : `Temps écoulé ! ${winner.name} l'emporte avec ${winner.score} points.`,
+    );
+  }
+
+  public endGame(winner: PlayerState | null, isVictory: boolean, reason: string) {
+    if (this.isGameOver) return;
+    this.isGameOver = true;
+    if (this.botInterval) clearInterval(this.botInterval);
+
+    this.callbacks?.onGameOver?.({ winner, isVictory, reason });
+  }
+
+  public restartGame(p1Name?: string) {
+    this.isGameOver = false;
+    this.bombs = [];
+    this.explosions = [];
+
+    const name = p1Name || this.players[0].name;
+    this.initPlayers(name);
+    this.generateMap();
+
+    if (this.currentLayout) {
+      this.drawAll();
+    }
+
+    this.startBotAI();
+    this.callbacks?.onScoreUpdate?.(this.players.map((p) => ({ id: p.id, score: 0 })));
   }
 
   get layout(): GridLayout | undefined {
@@ -226,6 +441,7 @@ export class GameScene implements Scene {
   }
 
   destroy(): void {
+    if (this.botInterval) clearInterval(this.botInterval);
     this.view.destroy({ children: true });
   }
 
@@ -234,11 +450,15 @@ export class GameScene implements Scene {
     this.drawFloor(this.currentLayout);
     this.drawWalls(this.currentLayout);
     this.drawEntities(this.currentLayout);
-    
-    // Dessin de la bordure extérieure
+
     this.border.clear();
     this.border
-      .rect(this.currentLayout.originX, this.currentLayout.originY, this.currentLayout.width, this.currentLayout.height)
+      .rect(
+        this.currentLayout.originX,
+        this.currentLayout.originY,
+        this.currentLayout.width,
+        this.currentLayout.height,
+      )
       .stroke({ width: BORDER_WIDTH, color: BORDER_COLOR, alignment: 1 });
   }
 
@@ -322,32 +542,23 @@ export class GameScene implements Scene {
         this.entitiesLayer.addChild(bombSprite);
       }
     }
-    
-    // 3. Fonction d'affichage et de centrage d'un joueur
-    const drawPlayer = (pCoords: { r: number; c: number }, textureName: string) => {
-      const tex = this.textures[textureName];
-      if (!tex) return;
 
-      const pos = layout.cellOrigin({ column: pCoords.c, row: pCoords.r });
+    // 3. Dessiner les joueurs vivants
+    for (const p of this.players) {
+      if (!p.alive) continue; // Les joueurs éliminés ne sont plus affichés
+
+      const tex = this.textures[p.textureKey];
+      if (!tex) continue;
+
+      const pos = layout.cellOrigin({ column: p.c, row: p.r });
       const pSprite = new Sprite(tex);
-      
-      // Mise à l'échelle proportionnelle selon les dimensions exactes du sprite
+
       pSprite.width = (tex.width / 16) * size;
       pSprite.height = (tex.height / 16) * size;
-      
-      // Centrage horizontal parfait sur la case
       pSprite.x = pos.x + (size - pSprite.width) / 2;
-      
-      // Alignement sur le bas de la case (les pieds au sol)
       pSprite.y = pos.y + size - pSprite.height;
-      
-      this.entitiesLayer.addChild(pSprite);
-    };
 
-    // Dessin des 4 joueurs (P1 Jaune, P2 Bleu, P3 Rouge, P4 Vert)
-    drawPlayer(this.player, 'player1');
-    drawPlayer(this.player2, 'player2');
-    drawPlayer(this.player3, 'player3');
-    drawPlayer(this.player4, 'player4');
+      this.entitiesLayer.addChild(pSprite);
+    }
   }
 }
