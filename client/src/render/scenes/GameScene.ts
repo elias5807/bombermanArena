@@ -143,6 +143,8 @@ export class GameScene implements Scene {
         }),
       ),
       bus.on('server:GAME_STATE', (message) => this.handleGameState(message)),
+      bus.on('server:BOMB_PLACED', (message) => this.handleServerBombPlaced(message)),
+      bus.on('server:BOMB_EXPLODED', (message) => this.handleServerBombExploded(message)),
     ];
 
     const unbind = () => {
@@ -179,18 +181,26 @@ export class GameScene implements Scene {
     let player = this.players.find((p) => p.id === payload.playerId);
 
     if (!player) {
-      // Si le joueur n'a pas encore été déclaré via GAME_STATE, on crée son état
-      const index = this.players.length;
-      player = {
-        id: payload.playerId,
-        name: `Joueur ${index + 1}`,
-        r: payload.row,
-        c: payload.col,
-        alive: true,
-        score: 0,
-        textureKey: PLAYER_TEXTURE_KEYS[index % PLAYER_TEXTURE_KEYS.length],
-      };
-      this.players.push(player);
+      // Si la liste contient le joueur local par défaut 'p1', on lui associe son véritable ID serveur
+      const localP1 = this.players.find((p) => p.id === 'p1');
+      if (localP1) {
+        localP1.id = payload.playerId;
+        player = localP1;
+        player.c = payload.col;
+        player.r = payload.row;
+      } else {
+        const index = this.players.length;
+        player = {
+          id: payload.playerId,
+          name: `Joueur ${index + 1}`,
+          r: payload.row,
+          c: payload.col,
+          alive: true,
+          score: 0,
+          textureKey: PLAYER_TEXTURE_KEYS[index % PLAYER_TEXTURE_KEYS.length],
+        };
+        this.players.push(player);
+      }
     } else {
       // Mise à jour de la position logique dictée par le serveur
       player.c = payload.col;
@@ -206,6 +216,13 @@ export class GameScene implements Scene {
    * Crée, déplace ou supprime les sprites selon la présence des joueurs dans le message.
    */
   public handleGameState(message: GameStateMessage): void {
+    if (message.map && Array.isArray(message.map) && message.map.length > 0) {
+      this.map = message.map.map((row) => [...row]);
+      if (this.currentLayout) {
+        this.drawWalls(this.currentLayout);
+      }
+    }
+
     const activePlayerIds = new Set(message.players.map((p) => p.playerId));
 
     // 1. Suppression des sprites des joueurs absents de l'état serveur
@@ -236,6 +253,68 @@ export class GameScene implements Scene {
 
     // 3. Synchronisation visuelle de tous les sprites avec la disposition actuelle
     this.syncPlayerSprites();
+  }
+
+  public handleServerBombPlaced(payload: {
+    bombId: string;
+    playerId: string;
+    col: number;
+    row: number;
+  }): void {
+    const exists = this.bombs.find((b) => b.r === payload.row && b.c === payload.col);
+    if (exists) return;
+
+    const bomb = { r: payload.row, c: payload.col, ownerId: payload.playerId, ticking: false };
+    this.bombs.push(bomb);
+    this.redrawEntities();
+
+    setTimeout(() => {
+      bomb.ticking = true;
+      this.redrawEntities();
+    }, 1500);
+  }
+
+  public handleServerBombExploded(payload: {
+    bombId: string;
+    col: number;
+    row: number;
+    affectedCells: { col: number; row: number }[];
+    destroyedBricks?: { col: number; row: number }[];
+    eliminatedPlayers?: string[];
+  }): void {
+    this.bombs = this.bombs.filter((b) => !(b.r === payload.row && b.c === payload.col));
+
+    if (payload.destroyedBricks && payload.destroyedBricks.length > 0) {
+      for (const brick of payload.destroyedBricks) {
+        if (this.map[brick.row]) {
+          this.map[brick.row][brick.col] = 0;
+        }
+      }
+      if (this.currentLayout) {
+        this.drawWalls(this.currentLayout);
+      }
+    }
+
+    const newExplosions = payload.affectedCells.map((cell) => ({ r: cell.row, c: cell.col }));
+    this.explosions.push(...newExplosions);
+    this.redrawEntities();
+
+    if (payload.eliminatedPlayers && payload.eliminatedPlayers.length > 0) {
+      for (const id of payload.eliminatedPlayers) {
+        const player = this.players.find((p) => p.id === id);
+        if (player) {
+          player.alive = false;
+          this.callbacks?.onPlayerEliminated?.(id);
+        }
+      }
+    }
+
+    setTimeout(() => {
+      this.explosions = this.explosions.filter((exp) => !newExplosions.includes(exp));
+      this.redrawEntities();
+    }, 400);
+
+    this.checkGameConditions();
   }
 
   /**

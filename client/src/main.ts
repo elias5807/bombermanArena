@@ -1,3 +1,4 @@
+import type { GameStateMessage } from '@shared/protocol/messages';
 import { App } from './App';
 import { PixiRenderer } from './render/PixiRenderer';
 import { GameScene } from './render/scenes/GameScene';
@@ -10,12 +11,8 @@ import './style.css';
  * Enchaîne les écrans décrits dans `index.html` (connexion, salle d'attente, partie, aide).
  * Au lancement de la partie, démarre le rendu PixiJS, charge les sprites, puis affiche
  * `GameScene` et lui transmet les touches du clavier.
- *
- * Provisoire : rien ne passe encore par le bus d'événements ni par le réseau. L'assemblage
- * des couches (App.ts, connexion simulée ou WebSocket) arrive dans une PR dédiée.
  */
 
-/** Provisoire : les dimensions de la grille viendront du serveur, à valider avec le Backend. */
 const DEMO_GRID = { columns: 15, rows: 13 };
 
 // DOM Elements
@@ -26,6 +23,7 @@ const helpPanel = document.getElementById('help-panel') as HTMLElement;
 const canvasContainer = document.getElementById('canvas-container') as HTMLDivElement;
 const pseudoInput = document.getElementById('pseudo-input') as HTMLInputElement;
 const lobbyMyName = document.getElementById('lobby-my-name') as HTMLSpanElement;
+const lobbyPlayersList = document.querySelector('.lobby-players') as HTMLUListElement;
 
 // Buttons
 const btnLogin = document.getElementById('btn-login') as HTMLButtonElement;
@@ -38,6 +36,7 @@ const btnQuit = document.getElementById('btn-quit') as HTMLButtonElement;
 
 let renderer: PixiRenderer | null = null;
 let currentScene: GameScene | null = null;
+let cachedGameState: GameStateMessage | null = null;
 
 // Interactions Help Panel
 function showHelp() {
@@ -54,10 +53,80 @@ btnCloseHelp.addEventListener('click', hideHelp);
 const app = new App();
 void app.start();
 
+// Synchronisation de l'affichage du lobby avec le serveur
+app.bus.on('server:LOBBY_STATUS', ({ players }) => {
+  if (!lobbyPlayersList) return;
+  lobbyPlayersList.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const player = players[i];
+    const li = document.createElement('li');
+    li.className = player ? 'lobby-player ready' : 'lobby-player waiting';
+    li.innerHTML = `
+      <img src="/assets/sprites/joueur_${i + 1}.png" class="pixel-avatar" alt="P${i + 1}" />
+      <span>${player ? `P${i + 1}: ${player.playerName}` : `P${i + 1}: En attente...`}</span>
+      <span class="status">${player ? 'PRÊT' : 'ATTENTE'}</span>
+    `;
+    lobbyPlayersList.appendChild(li);
+  }
+});
+
+function updateHUD(players: { name?: string; playerId: string }[]) {
+  players.forEach((p, idx) => {
+    const item = document.querySelector(`.player-item.p${idx + 1} .player-name`);
+    if (item && p.name) {
+      item.textContent = `${p.name} (P${idx + 1})`;
+    }
+  });
+}
+
+function launchGame() {
+  if (gameScreen.classList.contains('hidden')) {
+    lobbyScreen.classList.add('hidden');
+    gameScreen.classList.remove('hidden');
+
+    if (!renderer && canvasContainer) {
+      PixiRenderer.create(canvasContainer)
+        .then(async (r) => {
+          renderer = r;
+          const grid = cachedGameState?.grid ?? DEMO_GRID;
+          currentScene = new GameScene(grid, await loadSprites(), app.bus);
+          r.setScene(currentScene);
+
+          if (cachedGameState) {
+            currentScene.handleGameState(cachedGameState);
+            updateHUD(cachedGameState.players);
+          }
+        })
+        .catch((error: unknown) => {
+          console.error("Impossible d'initialiser le rendu :", error);
+        });
+    } else if (currentScene && cachedGameState) {
+      currentScene.handleGameState(cachedGameState);
+      updateHUD(cachedGameState.players);
+    }
+  }
+}
+
+// Mise en cache de l'état du jeu pour initialiser GameScene dès son ouverture
+app.bus.on('server:GAME_STATE', (msg) => {
+  cachedGameState = msg;
+  if (currentScene) {
+    currentScene.handleGameState(msg);
+  }
+  updateHUD(msg.players);
+});
+
+// Lancement automatique synchronisé quand le serveur annonce le début de partie
+app.bus.on('server:GAME_STARTED', () => {
+  launchGame();
+});
+
 // Actions Login -> Lobby
 btnLogin.addEventListener('click', () => {
   const pseudo = pseudoInput.value.trim() || 'VoleurInconnu';
-  lobbyMyName.textContent = `P1: ${pseudo}`;
+  if (lobbyMyName) {
+    lobbyMyName.textContent = `P1: ${pseudo}`;
+  }
 
   // Notification au serveur via le bus d'événements
   app.bus.emit('input:join', { playerName: pseudo });
@@ -78,21 +147,8 @@ btnLeaveLobby.addEventListener('click', () => {
 });
 
 btnStartGame.addEventListener('click', () => {
-  lobbyScreen.classList.add('hidden');
-  gameScreen.classList.remove('hidden');
-
-  // Initialisation du moteur de jeu et abonnement de la scène au bus d'événements
-  if (!renderer && canvasContainer) {
-    PixiRenderer.create(canvasContainer)
-      .then(async (r) => {
-        renderer = r;
-        currentScene = new GameScene(DEMO_GRID, await loadSprites(), app.bus);
-        r.setScene(currentScene);
-      })
-      .catch((error: unknown) => {
-        console.error("Impossible d'initialiser le rendu :", error);
-      });
-  }
+  app.bus.emit('input:start');
+  launchGame();
 });
 
 // Actions Game -> Login
