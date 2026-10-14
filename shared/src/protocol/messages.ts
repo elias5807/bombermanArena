@@ -5,13 +5,28 @@ export interface JoinLobbyMessage {
   playerName: string;
 }
 
+export type Direction = 'up' | 'down' | 'left' | 'right';
+
 export interface MoveMessage {
   type: 'MOVE';
   playerId: string;
-  direction: 'up' | 'down' | 'left' | 'right';
+  direction: Direction;
 }
 
-export type ClientMessage = JoinLobbyMessage | MoveMessage;
+export interface PlaceBombMessage {
+  type: 'PLACE_BOMB';
+  playerId: string;
+}
+
+export interface StartGameMessage {
+  type: 'START_GAME';
+}
+
+export type ClientMessage =
+  | JoinLobbyMessage
+  | MoveMessage
+  | PlaceBombMessage
+  | StartGameMessage;
 
 // Messages envoyés par le serveur vers joueurs
 
@@ -55,6 +70,30 @@ export interface PositionUpdatedMessage {
 }
 
 /**
+ * Message diffusé quand une bombe est posée.
+ */
+export interface BombPlacedMessage {
+  type: 'BOMB_PLACED';
+  bombId: string;
+  playerId: string;
+  col: number;
+  row: number;
+}
+
+/**
+ * Message diffusé quand une bombe explose.
+ */
+export interface BombExplodedMessage {
+  type: 'BOMB_EXPLODED';
+  bombId: string;
+  col: number;
+  row: number;
+  affectedCells: { col: number; row: number }[];
+  destroyedBricks?: { col: number; row: number }[];
+  eliminatedPlayers?: string[];
+}
+
+/**
  * Message de synchronisation d'état complet du jeu (au démarrage ou après reconnexion).
  */
 export interface GameStateMessage {
@@ -64,6 +103,7 @@ export interface GameStateMessage {
     columns: number;
     rows: number;
   };
+  map?: number[][];
 }
 
 export type ServerMessage =
@@ -71,4 +111,7 @@ export type ServerMessage =
   | LobbyStatusMessage
   | GameStartedMessage
   | PositionUpdatedMessage
-  | GameStateMessage;
+  | GameStateMessage
+  | BombPlacedMessage
+  | BombExplodedMessage;
+
