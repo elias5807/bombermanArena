@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 
-const PORT = 3000
+const PORT = 0;
 
 describe("WebSocket server", () => {
     it("starts successfully", async () => {
