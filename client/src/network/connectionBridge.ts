@@ -69,6 +69,16 @@ export function bridgeConnection(connection: IGameConnection, bus: AppEventBus):
         send({ type: 'MOVE', playerId: ownPlayerId, direction });
       }
     }),
+
+    bus.on('input:bomb', () => {
+      if (ownPlayerId !== undefined) {
+        send({ type: 'PLACE_BOMB', playerId: ownPlayerId });
+      }
+    }),
+
+    bus.on('input:start', () => {
+      send({ type: 'START_GAME' });
+    }),
   ];
 
   return () => {

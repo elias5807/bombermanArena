@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ServerMessage } from '@shared/protocol/messages';
 import { App, createConnection } from '../../src/App';
-import { SERVER_URL } from '../../src/config';
 import { MockServerAdapter } from '../../src/network/MockServerAdapter';
+import { WebSocketClient } from '../../src/network/WebSocketClient';
 import { FakeConnection } from '../helpers/FakeConnection';
 import { recordEvents } from '../helpers/recordEvents';
 
@@ -36,8 +36,8 @@ describe('createConnection', () => {
     expect(createConnection('mock')).toBeInstanceOf(MockServerAdapter);
   });
 
-  it("refuse le mode server tant que la connexion réelle n'existe pas, en citant l'URL visée", () => {
-    expect(() => createConnection('server')).toThrow(SERVER_URL);
+  it('crée la connexion réelle en mode server', () => {
+    expect(createConnection('server')).toBeInstanceOf(WebSocketClient);
   });
 });
 

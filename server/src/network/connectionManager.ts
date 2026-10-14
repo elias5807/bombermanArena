@@ -1,8 +1,8 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import type { ClientMessage, ServerMessage } from '@bomberman-area/shared';
-import { addPlayerToLobby, removePlayerFromLobby } from './lobbyManager.js';
+import type { ClientMessage } from '@bomberman-area/shared';
+import { GameEngine } from '../game/GameEngine.js';
 
-export function startConnectionManager(port: number): WebSocketServer {
+export function startConnectionManager(port: number, engine = new GameEngine()): WebSocketServer {
   const wss = new WebSocketServer({ port });
 
   console.log(`Serveur démarré, en écoute sur le port ${port}`);
@@ -10,7 +10,6 @@ export function startConnectionManager(port: number): WebSocketServer {
   wss.on('connection', (socket: WebSocket) => {
     console.log('Un joueur vient de se connecter');
 
-    // playerId n'est connu qu'une fois JOIN_LOBBY reçu, donc undefined au départ.
     let playerId: string | undefined;
 
     socket.on('message', (data) => {
@@ -25,20 +24,31 @@ export function startConnectionManager(port: number): WebSocketServer {
 
       switch (message.type) {
         case 'JOIN_LOBBY': {
-          playerId = addPlayerToLobby(socket, message.playerName) ?? undefined;
-          console.log(`${message.playerName} a rejoint le lobby (id: ${playerId ?? 'refusé, lobby plein'})`);
+          playerId = engine.addPlayer(socket, message.playerName) ?? undefined;
+          console.log(
+            `${message.playerName} a rejoint le lobby (id: ${playerId ?? 'refusé, lobby plein'})`,
+          );
           break;
         }
 
         case 'MOVE': {
-          const response: ServerMessage = {
-            type: 'POSITION_UPDATED',
-            playerId: message.playerId,
-            col: 1, // Coordonnées logiques calculées par l'autorité serveur
-            row: 1,
-            direction: message.direction,
-          };
-          socket.send(JSON.stringify(response));
+          const id = playerId ?? message.playerId;
+          if (id) {
+            engine.movePlayer(id, message.direction);
+          }
+          break;
+        }
+
+        case 'PLACE_BOMB': {
+          const id = playerId ?? message.playerId;
+          if (id) {
+            engine.placeBomb(id);
+          }
+          break;
+        }
+
+        case 'START_GAME': {
+          engine.startGame();
           break;
         }
 
@@ -51,7 +61,7 @@ export function startConnectionManager(port: number): WebSocketServer {
     socket.on('close', () => {
       console.log('Un joueur s\'est déconnecté');
       if (playerId) {
-        removePlayerFromLobby(playerId);
+        engine.removePlayer(playerId);
       }
     });
   });

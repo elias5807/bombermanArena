@@ -54,8 +54,10 @@ export interface InputEvents {
   'input:join': { playerName: string };
   /** Se déplacer d'une case. */
   'input:move': { direction: Direction };
-  /** Poser une bombe. Pas encore transmis au serveur : `shared/` n'a pas de message pour cela. */
+  /** Poser une bombe. Transmis au serveur via PLACE_BOMB. */
   'input:bomb': undefined;
+  /** Lancer la partie depuis la salle d'attente. */
+  'input:start': undefined;
 }
 
 /**

@@ -54,10 +54,11 @@ describe('application assemblée : serveur simulé → bus', () => {
     expect(startedWith).toEqual([['p1', 'p2', 'p3', 'p4']]);
   });
 
-  it('réglé sur le serveur réel, le client refuse de démarrer tant que la connexion n’existe pas', async () => {
+  it('réglé sur le serveur réel, le client initialise la connexion WebSocket', async () => {
     const ServerApp = await loadAppWithMode('server');
+    const app = new ServerApp();
 
-    expect(() => new ServerApp()).toThrow('VITE_CONNECTION_MODE');
+    expect(app).toBeInstanceOf(ServerApp);
   });
 
   it('les demandes du joueur publiées sur le bus arrivent au serveur simulé', async () => {
