@@ -5,23 +5,18 @@ import { gameSessionScenario } from './mocks/fixtures/game-session.fixture';
 import { bridgeConnection } from './network/connectionBridge';
 import type { IGameConnection } from './network/IGameConnection';
 import { MockServerAdapter } from './network/MockServerAdapter';
+import { WebSocketClient } from './network/WebSocketClient';
 
 /**
  * Choisit la connexion au serveur de jeu. C'est le seul endroit du client qui
  * sait laquelle est utilisée : les couches ne voient que `IGameConnection`.
- *
- * @throws Error en mode `server`, tant que la connexion réelle n'existe pas.
  */
 export function createConnection(mode: ConnectionMode): IGameConnection {
   switch (mode) {
     case 'mock':
       return new MockServerAdapter(gameSessionScenario);
     case 'server':
-      // La connexion réelle se branche ici : `return new WebSocketClient(SERVER_URL);`
-      throw new Error(
-        `La connexion au serveur réel (${SERVER_URL}) n'existe pas encore : ` +
-          'laisser VITE_CONNECTION_MODE à « mock ».',
-      );
+      return new WebSocketClient(SERVER_URL);
   }
 }
 
