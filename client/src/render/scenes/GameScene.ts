@@ -1,11 +1,14 @@
-import { Container, Graphics, Sprite, Texture, Assets } from 'pixi.js';
+import { Container, Graphics, Sprite } from 'pixi.js';
 import { GridLayout, type GridSize, type Viewport } from '../GridLayout';
+import type { SpriteKey, SpriteTextures } from '../sprites/loadSprites';
 import type { Scene } from './Scene';
 
+/** Espace laissé autour de la grille, en pixels. */
 const MARGIN = 16;
 const BORDER_COLOR = 0x111315;
 const BORDER_WIDTH = 4;
 
+/** Un joueur de la partie : sa case (`r` = ligne, `c` = colonne), son score et son sprite. */
 export interface PlayerState {
   id: string;
   name: string;
@@ -13,15 +16,40 @@ export interface PlayerState {
   c: number;
   alive: boolean;
   score: number;
-  textureKey: string;
+  textureKey: SpriteKey;
 }
 
+/** Ce que la scène signale à l'interface pendant la partie. Chaque fonction est facultative. */
 export interface GameCallbacks {
+  /** Les scores de tous les joueurs, après chaque explosion et quand la partie est relancée. */
   onScoreUpdate?: (scores: { id: string; score: number }[]) => void;
+  /** Un joueur vient d'être touché par une explosion. */
   onPlayerEliminated?: (playerId: string) => void;
+  /**
+   * La partie est terminée. `winner` vaut `null` si le joueur local est éliminé ou s'il ne
+   * reste aucun survivant ; `isVictory` est vrai quand le gagnant est le joueur local.
+   */
   onGameOver?: (result: { winner: PlayerState | null; isVictory: boolean; reason: string }) => void;
 }
 
+/**
+ * Scène de la partie : dessine le plateau avec les sprites (sol, murs, blocs cassables,
+ * bombes, explosions, joueurs), dans un cadre.
+ *
+ * Le plateau est recalculé et redessiné à chaque changement de taille de la zone
+ * d'affichage, pour garder des cases entières. Les textures viennent de l'appelant : la
+ * scène ne charge aucune image, elle se construit donc sans navigateur.
+ *
+ * Provisoire : la scène simule aussi la partie (carte tirée au hasard, déplacements,
+ * bombes, rivaux automatiques, scores), en attendant que l'état du jeu vienne du serveur
+ * (voir « Architecture » dans le README). Les rivaux démarrent dès la construction et
+ * s'arrêtent avec `destroy`.
+ *
+ * @example
+ * const scene = new GameScene({ columns: 15, rows: 13 }, await loadSprites());
+ * renderer.setScene(scene);
+ * scene.handleInput('ArrowRight'); // déplace le joueur local d'une case
+ */
 export class GameScene implements Scene {
   readonly view = new Container();
 
@@ -38,22 +66,33 @@ export class GameScene implements Scene {
   // 0 = vide, 1 = incassable, 2 = cassable
   private map: number[][] = [];
 
-  // Liste des 4 joueurs
+  /** Les quatre joueurs : le premier est le joueur local, les autres des rivaux automatiques. */
   public players: PlayerState[] = [];
 
   private bombs: { r: number; c: number; ownerId: string; ticking: boolean }[] = [];
   private explosions: { r: number; c: number }[] = [];
 
-  // Textures des sprites individuels chargés
-  private texturesReady = false;
-  private textures: Record<string, Texture> = {};
+  private readonly textures: SpriteTextures;
 
   private callbacks: GameCallbacks | undefined;
   private isGameOver = false;
-  private botInterval: number | null = null;
+  private botInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(grid: GridSize, callbacks?: GameCallbacks, initialPlayerName: string = 'Vous') {
+  /**
+   * @param grid Dimensions du plateau, en cases. Les joueurs partent à une case de chaque
+   *   coin : en dessous de 3 × 3, ils sont placés hors du plateau.
+   * @param textures Textures des sprites, chargées par `loadSprites`.
+   * @param callbacks Fonctions prévenues des scores, des éliminations et de la fin de partie.
+   * @param initialPlayerName Nom du joueur local.
+   */
+  constructor(
+    grid: GridSize,
+    textures: SpriteTextures,
+    callbacks?: GameCallbacks,
+    initialPlayerName: string = 'Vous',
+  ) {
     this.grid = grid;
+    this.textures = textures;
     this.callbacks = callbacks;
 
     this.view.addChild(this.floorLayer);
@@ -63,7 +102,7 @@ export class GameScene implements Scene {
 
     this.initPlayers(initialPlayerName);
     this.generateMap();
-    this.loadSprites();
+    this.startBotAI();
   }
 
   private initPlayers(p1Name: string) {
@@ -99,64 +138,6 @@ export class GameScene implements Scene {
     ];
   }
 
-  /**
-   * Charge tous les sprites séparés depuis /assets/sprites/
-   */
-  private async loadSprites() {
-    const [floor, wall, brick, bomb, bombTicking, explosion, player1, player2, player3, player4] =
-      await Promise.all([
-        Assets.load<Texture>('/assets/sprites/sol.png'),
-        Assets.load<Texture>('/assets/sprites/mur_incassable.png'),
-        Assets.load<Texture>('/assets/sprites/mur_cassable.png'),
-        Assets.load<Texture>('/assets/sprites/bombe_poser.png'),
-        Assets.load<Texture>('/assets/sprites/bombe_qui_va_esploser.png'),
-        Assets.load<Texture>('/assets/sprites/explosion.png'),
-        Assets.load<Texture>('/assets/sprites/joueur_1.png'),
-        Assets.load<Texture>('/assets/sprites/joueur_2.png'),
-        Assets.load<Texture>('/assets/sprites/joueur_3.png'),
-        Assets.load<Texture>('/assets/sprites/joueur_4.png'),
-      ]);
-
-    // Rendu pixel art net
-    const all = [
-      floor,
-      wall,
-      brick,
-      bomb,
-      bombTicking,
-      explosion,
-      player1,
-      player2,
-      player3,
-      player4,
-    ];
-    for (const tex of all) {
-      if (tex?.source) {
-        tex.source.scaleMode = 'nearest';
-      }
-    }
-
-    this.textures['floor'] = floor;
-    this.textures['wall'] = wall;
-    this.textures['brick'] = brick;
-    this.textures['bomb'] = bomb;
-    this.textures['bomb_ticking'] = bombTicking;
-    this.textures['explosion'] = explosion;
-    this.textures['player1'] = player1;
-    this.textures['player2'] = player2;
-    this.textures['player3'] = player3;
-    this.textures['player4'] = player4;
-
-    this.texturesReady = true;
-
-    if (this.currentLayout) {
-      this.drawAll();
-    }
-
-    // Démarrage de l'IA autonome pour les 3 rivaux
-    this.startBotAI();
-  }
-
   private generateMap() {
     for (let r = 0; r < this.grid.rows; r++) {
       this.map[r] = [];
@@ -187,8 +168,8 @@ export class GameScene implements Scene {
    */
   private startBotAI() {
     if (this.botInterval) clearInterval(this.botInterval);
-    this.botInterval = window.setInterval(() => {
-      if (this.isGameOver || !this.texturesReady) return;
+    this.botInterval = setInterval(() => {
+      if (this.isGameOver) return;
       this.updateBots();
     }, 750);
   }
@@ -242,8 +223,13 @@ export class GameScene implements Scene {
     this.redrawEntities();
   }
 
+  /**
+   * Applique une touche au joueur local : une flèche (`ArrowUp`, `ArrowDown`, `ArrowLeft`,
+   * `ArrowRight`) le déplace d'une case si elle est libre (ni mur, ni bloc, ni bombe), espace
+   * (`' '`) pose une bombe. Sans effet si le joueur est éliminé ou la partie terminée.
+   */
   public handleInput(key: string) {
-    if (!this.texturesReady || this.isGameOver) return;
+    if (this.isGameOver) return;
 
     const p1 = this.players[0];
     if (!p1 || !p1.alive) return;
@@ -275,6 +261,11 @@ export class GameScene implements Scene {
     }
   }
 
+  /**
+   * Pose une bombe sur la case de `player`, sauf s'il y en a déjà une. Elle explose 2,5 s
+   * plus tard, sur sa case et les quatre cases voisines, sauf les murs incassables. Sans
+   * effet si le joueur est éliminé ou la partie terminée.
+   */
   public placeBomb(player: PlayerState) {
     if (!player.alive || this.isGameOver) return;
 
@@ -383,6 +374,10 @@ export class GameScene implements Scene {
     }
   }
 
+  /**
+   * Termine la partie parce que le temps est écoulé : le joueur encore en vie qui a le plus
+   * de points gagne.
+   */
   public timeOut() {
     if (this.isGameOver) return;
 
@@ -406,6 +401,10 @@ export class GameScene implements Scene {
     );
   }
 
+  /**
+   * Termine la partie, arrête les rivaux et prévient `onGameOver`. Sans effet si elle est
+   * déjà terminée.
+   */
   public endGame(winner: PlayerState | null, isVictory: boolean, reason: string) {
     if (this.isGameOver) return;
     this.isGameOver = true;
@@ -414,6 +413,11 @@ export class GameScene implements Scene {
     this.callbacks?.onGameOver?.({ winner, isVictory, reason });
   }
 
+  /**
+   * Relance une partie : nouvelle carte, joueurs revenus à leur case de départ, scores à zéro.
+   *
+   * @param p1Name Nom du joueur local ; par défaut, celui de la partie précédente.
+   */
   public restartGame(p1Name?: string) {
     this.isGameOver = false;
     this.bombs = [];
@@ -431,15 +435,21 @@ export class GameScene implements Scene {
     this.callbacks?.onScoreUpdate?.(this.players.map((p) => ({ id: p.id, score: 0 })));
   }
 
+  /**
+   * Disposition actuelle de la grille, utile pour placer des éléments sur ses cases.
+   * Absente tant que la scène n'a pas été affichée.
+   */
   get layout(): GridLayout | undefined {
     return this.currentLayout;
   }
 
+  /** @throws RangeError si les dimensions de la grille sont invalides. */
   resize(viewport: Viewport): void {
     this.currentLayout = GridLayout.fit(this.grid, viewport, MARGIN);
     this.drawAll();
   }
 
+  /** Arrête les rivaux automatiques, puis libère la vue et tout ce qu'elle dessine. */
   destroy(): void {
     if (this.botInterval) clearInterval(this.botInterval);
     this.view.destroy({ children: true });
@@ -464,7 +474,6 @@ export class GameScene implements Scene {
 
   private drawFloor(layout: GridLayout): void {
     this.floorLayer.removeChildren();
-    if (!this.texturesReady) return;
 
     for (let row = 0; row < layout.rows; row += 1) {
       for (let column = 0; column < layout.columns; column += 1) {
@@ -481,7 +490,6 @@ export class GameScene implements Scene {
 
   private drawWalls(layout: GridLayout): void {
     this.wallsLayer.removeChildren();
-    if (!this.texturesReady) return;
 
     for (let r = 0; r < layout.rows; r++) {
       for (let c = 0; c < layout.columns; c++) {
@@ -507,7 +515,6 @@ export class GameScene implements Scene {
 
   private drawEntities(layout: GridLayout): void {
     this.entitiesLayer.removeChildren();
-    if (!this.texturesReady) return;
 
     const size = layout.cellSize;
 

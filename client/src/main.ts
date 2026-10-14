@@ -1,9 +1,21 @@
 import { PixiRenderer } from './render/PixiRenderer';
 import { GameScene } from './render/scenes/GameScene';
+import { loadSprites } from './render/sprites/loadSprites';
 import './style.css';
 
+/**
+ * Point d'entrée de l'application.
+ *
+ * Enchaîne les écrans décrits dans `index.html` (connexion, salle d'attente, partie, aide).
+ * Au lancement de la partie, démarre le rendu PixiJS, charge les sprites, puis affiche
+ * `GameScene` et lui transmet les touches du clavier.
+ *
+ * Provisoire : rien ne passe encore par le bus d'événements ni par le réseau. L'assemblage
+ * des couches (App.ts, connexion simulée ou WebSocket) arrive dans une PR dédiée.
+ */
+
+/** Provisoire : les dimensions de la grille viendront du serveur, à valider avec le Backend. */
 const DEMO_GRID = { columns: 15, rows: 13 };
-const MATCH_DURATION = 120; // 2 minutes par match
 
 // DOM Elements
 const loginScreen = document.getElementById('login-screen') as HTMLElement;
@@ -27,8 +39,12 @@ let renderer: PixiRenderer | null = null;
 let currentScene: GameScene | null = null;
 
 // Interactions Help Panel
-function showHelp() { helpPanel.classList.remove('hidden'); }
-function hideHelp() { helpPanel.classList.add('hidden'); }
+function showHelp() {
+  helpPanel.classList.remove('hidden');
+}
+function hideHelp() {
+  helpPanel.classList.add('hidden');
+}
 btnShowHelpLogin.addEventListener('click', showHelp);
 btnShowHelpGame.addEventListener('click', showHelp);
 btnCloseHelp.addEventListener('click', hideHelp);
@@ -37,7 +53,7 @@ btnCloseHelp.addEventListener('click', hideHelp);
 btnLogin.addEventListener('click', () => {
   const pseudo = pseudoInput.value.trim() || 'VoleurInconnu';
   lobbyMyName.textContent = `P1: ${pseudo}`; // Met à jour le nom dans le lobby
-  
+
   // Transition vers la salle d'attente
   loginScreen.classList.add('hidden');
   lobbyScreen.classList.remove('hidden');
@@ -60,10 +76,10 @@ btnStartGame.addEventListener('click', () => {
   // Initialisation du moteur de jeu
   if (!renderer && canvasContainer) {
     PixiRenderer.create(canvasContainer)
-      .then((r) => {
+      .then(async (r) => {
         renderer = r;
-        currentScene = new GameScene(DEMO_GRID);
-        renderer.setScene(currentScene);
+        currentScene = new GameScene(DEMO_GRID, await loadSprites());
+        r.setScene(currentScene);
       })
       .catch((error: unknown) => {
         console.error("Impossible d'initialiser le rendu :", error);

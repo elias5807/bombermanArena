@@ -16,12 +16,24 @@
   --font-digital: 'Courier New', Courier, monospace;
 }
 
-* { box-sizing: border-box; }
-body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg-color); font-family: var(--font-body); overflow: hidden; }
+* {
+  box-sizing: border-box;
+}
+body,
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-color);
+  font-family: var(--font-body);
+  overflow: hidden;
+}
 
 .layout-container {
   display: flex;
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   padding: 20px;
   gap: 20px;
 }
@@ -40,8 +52,12 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(-
   border: 4px solid var(--steel-light);
   border-radius: 8px;
   position: relative;
-  box-shadow: inset 0 0 20px #000, 0 10px 20px rgba(0,0,0,0.8);
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  box-shadow:
+    inset 0 0 20px #000,
+    0 10px 20px rgba(0, 0, 0, 0.8);
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease;
 }
 
 .right-column.hidden {
@@ -63,7 +79,9 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(-
   background: var(--kraft);
   border-radius: 10px 10px 10px 10px;
   padding: 40px;
-  box-shadow: inset 0 0 50px var(--kraft-dark), 0 10px 15px rgba(0,0,0,0.5);
+  box-shadow:
+    inset 0 0 50px var(--kraft-dark),
+    0 10px 15px rgba(0, 0, 0, 0.5);
   position: relative;
   border: 2px solid #5a4128;
   align-items: center;
@@ -73,37 +91,94 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(-
 .kraft-folder::before {
   content: '';
   position: absolute;
-  top: -30px; left: 30px;
-  width: 180px; height: 30px;
+  top: -30px;
+  left: 30px;
+  width: 180px;
+  height: 30px;
   background: var(--kraft);
   border-radius: 10px 10px 0 0;
   border: 2px solid #5a4128;
   border-bottom: none;
 }
 
-.kraft-folder h1 { font-family: var(--font-title); font-size: 4rem; margin: 0; color: #111; text-shadow: 2px 2px 0px rgba(255,255,255,0.3); text-align: center; line-height: 1.1; }
-.kraft-folder h2 { font-family: var(--font-title); font-size: 2rem; margin: 10px 0 40px 0; color: #333; text-align: center; }
+.kraft-folder h1 {
+  font-family: var(--font-title);
+  font-size: 4rem;
+  margin: 0;
+  color: #111;
+  text-shadow: 2px 2px 0px rgba(255, 255, 255, 0.3);
+  text-align: center;
+  line-height: 1.1;
+}
+.kraft-folder h2 {
+  font-family: var(--font-title);
+  font-size: 2rem;
+  margin: 10px 0 40px 0;
+  color: #333;
+  text-align: center;
+}
 
-.form-group { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 400px; margin-bottom: 30px; }
-.form-group label { font-weight: bold; font-size: 1.2rem; }
-.form-group input { 
-  padding: 15px; font-size: 1.2rem; border-radius: 5px; border: 3px solid #333; 
-  background: #222; color: var(--gold); font-family: var(--font-digital); font-weight: bold;
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 400px;
+  margin-bottom: 30px;
+}
+.form-group label {
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+.form-group input {
+  padding: 15px;
+  font-size: 1.2rem;
+  border-radius: 5px;
+  border: 3px solid #333;
+  background: #222;
+  color: var(--gold);
+  font-family: var(--font-digital);
+  font-weight: bold;
 }
 
 .btn {
-  padding: 15px 30px; font-size: 1.2rem; font-family: var(--font-title); border: none; border-radius: 5px;
-  cursor: pointer; transition: transform 0.1s, filter 0.2s;
+  padding: 15px 30px;
+  font-size: 1.2rem;
+  font-family: var(--font-title);
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition:
+    transform 0.1s,
+    filter 0.2s;
   text-transform: uppercase;
-  margin-bottom: 15px; width: 100%; max-width: 400px;
-  box-shadow: 0 5px 0 rgba(0,0,0,0.5);
+  margin-bottom: 15px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.5);
 }
-.btn:active { transform: translateY(5px); box-shadow: none; }
-.btn:hover { filter: brightness(1.2); }
+.btn:active {
+  transform: translateY(5px);
+  box-shadow: none;
+}
+.btn:hover {
+  filter: brightness(1.2);
+}
 
-.btn.primary { background: var(--gold); color: #111; border: 2px solid var(--gold-dark); }
-.btn.secondary { background: var(--steel-light); color: var(--text-light); }
-.btn.danger { background: var(--red); color: white; border: 2px solid darkred; }
+.btn.primary {
+  background: var(--gold);
+  color: #111;
+  border: 2px solid var(--gold-dark);
+}
+.btn.secondary {
+  background: var(--steel-light);
+  color: var(--text-light);
+}
+.btn.danger {
+  background: var(--red);
+  color: white;
+  border: 2px solid darkred;
+}
 
 /* Vault Tech (Game) */
 .vault-tech {
@@ -117,7 +192,8 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(-
   box-shadow: inset 0 0 30px #000;
 }
 
-.hud-left, .hud-right {
+.hud-left,
+.hud-right {
   width: 220px;
   display: flex;
   flex-direction: column;
@@ -166,27 +242,105 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(-
   text-shadow: 0 0 10px var(--red);
 }
 
-.player-list { display: flex; flex-direction: column; gap: 15px; }
-.player-item { display: flex; flex-direction: column; background: #222; padding: 10px; border-radius: 5px; border-left: 4px solid var(--gold); }
-.player-name { font-weight: bold; color: var(--text-light); font-size: 0.9rem; margin-bottom: 5px; }
-.player-score { font-family: var(--font-digital); color: var(--green); background: #111; padding: 5px; text-align: right; border-radius: 3px; font-weight: bold; text-shadow: 0 0 5px var(--green); }
+.player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.player-item {
+  display: flex;
+  flex-direction: column;
+  background: #222;
+  padding: 10px;
+  border-radius: 5px;
+  border-left: 4px solid var(--gold);
+}
+.player-name {
+  font-weight: bold;
+  color: var(--text-light);
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+}
+.player-score {
+  font-family: var(--font-digital);
+  color: var(--green);
+  background: #111;
+  padding: 5px;
+  text-align: right;
+  border-radius: 3px;
+  font-weight: bold;
+  text-shadow: 0 0 5px var(--green);
+}
 
-.logo-mini { font-family: var(--font-title); font-size: 1.6rem; color: var(--gold); text-align: center; line-height: 1.2; }
+.logo-mini {
+  font-family: var(--font-title);
+  font-size: 1.6rem;
+  color: var(--gold);
+  text-align: center;
+  line-height: 1.2;
+}
 
 .btn.round-help {
-  width: 60px; height: 60px; border-radius: 50%; padding: 0; background: var(--gold); color: #000; font-size: 2rem;
-  display: flex; align-items: center; justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  padding: 0;
+  background: var(--gold);
+  color: #000;
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Help Panel (Right) */
-.steel-door { padding: 20px; color: var(--text-light); }
-.btn.close-x {
-  position: absolute; top: 10px; right: 10px; background: var(--red); color: white; width: 40px; height: 40px; border-radius: 5px; padding: 0; font-size: 1.2rem;
+.steel-door {
+  padding: 20px;
+  color: var(--text-light);
 }
-.steel-door h2 { font-family: var(--font-title); text-align: center; margin-top: 20px; color: var(--gold); font-size: 1.8rem; }
-.help-content { margin-top: 30px; font-size: 1rem; line-height: 1.5; color: #ddd; }
-.controls-box { background: #111; padding: 15px; border-radius: 5px; margin-top: 20px; text-align: center; border: 2px solid #333; }
-.key { display: inline-block; background: #333; color: white; padding: 5px 10px; border-radius: 3px; font-family: monospace; border-bottom: 3px solid #111; margin: 2px; }
+.btn.close-x {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: var(--red);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 5px;
+  padding: 0;
+  font-size: 1.2rem;
+}
+.steel-door h2 {
+  font-family: var(--font-title);
+  text-align: center;
+  margin-top: 20px;
+  color: var(--gold);
+  font-size: 1.8rem;
+}
+.help-content {
+  margin-top: 30px;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #ddd;
+}
+.controls-box {
+  background: #111;
+  padding: 15px;
+  border-radius: 5px;
+  margin-top: 20px;
+  text-align: center;
+  border: 2px solid #333;
+}
+.key {
+  display: inline-block;
+  background: #333;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 3px;
+  font-family: monospace;
+  border-bottom: 3px solid #111;
+  margin: 2px;
+}
 
 /* Lobby specific */
 .lobby-container {
@@ -302,10 +456,18 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(-
   object-fit: contain;
 }
 
-.player-item.p1 { border-left-color: #f5b041; }
-.player-item.p2 { border-left-color: #3498db; }
-.player-item.p3 { border-left-color: #e74c3c; }
-.player-item.p4 { border-left-color: #2ecc71; }
+.player-item.p1 {
+  border-left-color: #f5b041;
+}
+.player-item.p2 {
+  border-left-color: #3498db;
+}
+.player-item.p3 {
+  border-left-color: #e74c3c;
+}
+.player-item.p4 {
+  border-left-color: #2ecc71;
+}
 
 /* Help Panel Sprites Legend */
 .sprites-legend {
