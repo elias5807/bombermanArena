@@ -1,3 +1,4 @@
+import { App } from './App';
 import { PixiRenderer } from './render/PixiRenderer';
 import { GameScene } from './render/scenes/GameScene';
 import { loadSprites } from './render/sprites/loadSprites';
@@ -102,3 +103,6 @@ window.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// Démarre le bus et la connexion (simulée par défaut) ; les écrans ne s'en servent pas encore.
+void new App().start();

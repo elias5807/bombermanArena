@@ -128,15 +128,17 @@ Le client est découpé en couches qui communiquent **uniquement** par le bus
 d'événements. Règle d'or : une couche publie sur le bus et s'abonne à ce qui
 l'intéresse, sans jamais appeler une autre couche directement.
 
-| Dossier        | Responsabilité                                                    |
-| -------------- | ----------------------------------------------------------------- |
-| `src/core/`    | `EventBus` — publish/subscribe, aucune logique métier             |
-| `src/network/` | Connexion WebSocket réelle ou simulée, derrière `IGameConnection` |
-| `src/state/`   | État local du jeu, alimenté par les événements serveur            |
-| `src/input/`   | Clavier/souris traduits en intentions de jeu                      |
-| `src/render/`  | Rendu PixiJS : lit l'état, dessine, ne le modifie jamais          |
-| `src/ui/`      | Menu, lobby, HUD                                                  |
-| `src/mocks/`   | Scénarios de parties rejoués hors ligne                           |
+| Dossier        | Responsabilité                                                                |
+| -------------- | ----------------------------------------------------------------------------- |
+| `src/core/`    | `EventBus` — publish/subscribe, aucune logique métier ; catalogue `AppEvents` |
+| `src/network/` | Connexion WebSocket réelle ou simulée, derrière `IGameConnection`             |
+| `src/state/`   | État local du jeu, alimenté par les événements serveur                        |
+| `src/input/`   | Clavier/souris traduits en intentions de jeu                                  |
+| `src/render/`  | Rendu PixiJS : lit l'état, dessine, ne le modifie jamais                      |
+| `src/ui/`      | Menu, lobby, HUD                                                              |
+| `src/mocks/`   | Scénarios de parties rejoués hors ligne                                       |
+
+`src/App.ts` assemble ces couches (voir « Assemblage » plus bas) et `src/main.ts` le démarre.
 
 Le client ne contient **aucune logique de jeu autoritaire** : collisions,
 validation des déplacements et calcul des explosions appartiennent au serveur.
@@ -178,17 +180,45 @@ unsubscribe();
 
 Points à connaître :
 
-- Une seule instance, créée par `App.ts` (assemblage des couches) et transmise aux
-  couches : il n'y a pas de bus global, chaque test crée le sien.
+- Une seule instance, créée par `App.ts` (`app.bus`) et transmise aux couches : il n'y a
+  pas de bus global, chaque test crée le sien.
 - Une couche qui disparaît (changement de scène, par exemple) doit se désabonner,
   sinon elle continue de recevoir les événements.
 - Un abonné qui lève une exception n'empêche pas les suivants de recevoir
   l'événement : l'erreur est écrite dans la console. Dans un test, passer au
   constructeur une fonction qui relance l'erreur pour qu'elle ne soit pas avalée :
   `new EventBus<Events>((error) => { throw error; })`.
-- Les événements du jeu (noms et données) restent à définir avec les couches
-  `network/` et `state/`. Convention prévue : un préfixe par couche émettrice
-  (`input:*`, `server:*`).
+
+### Catalogue des événements
+
+Les événements de l'application sont décrits dans `src/core/AppEvents.ts` (`AppEvents`), et le
+bus de l'application est un `EventBus<AppEvents>` (alias `AppEventBus`). Le préfixe dit d'où
+vient l'information : `connection:` la liaison avec le serveur, `server:` ce que le serveur
+annonce, `input:` ce que le joueur demande.
+
+| Événement                 | Donnée                   | Publié par                                        | Écouté par                            |
+| ------------------------- | ------------------------ | ------------------------------------------------- | ------------------------------------- |
+| `connection:opened`       | —                        | `App`, une fois la connexion ouverte              | à venir : `ui/`                       |
+| `connection:closed`       | —                        | `App.stop()`, si la connexion était ouverte       | à venir : `ui/`                       |
+| `connection:error`        | `{ error }`              | `App` (ouverture impossible), pont (envoi échoué) | à venir : `ui/`                       |
+| `server:PLAYER_JOINED`    | `PlayerJoinedMessage`    | pont connexion ↔ bus, à la réception du message   | à venir : `state/`                    |
+| `server:LOBBY_STATUS`     | `LobbyStatusMessage`     | pont connexion ↔ bus, à la réception du message   | à venir : `state/`                    |
+| `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | à venir : `state/`                    |
+| `server:POSITION_UPDATED` | `PositionUpdatedMessage` | pont connexion ↔ bus, à la réception du message   | à venir : `state/`                    |
+| `input:join`              | `{ playerName }`         | à venir : `ui/` (écran de connexion)              | pont, qui envoie `JOIN_LOBBY`         |
+| `input:move`              | `{ direction }`          | à venir : `input/` (clavier)                      | pont, qui envoie `MOVE`               |
+| `input:bomb`              | —                        | à venir : `input/` (clavier)                      | personne : aucun message dans shared/ |
+
+Points à connaître :
+
+- Les événements `server:*` ne sont pas écrits à la main : il y en a un par message de
+  `ServerMessage` (`shared/`), nommé `server:<TYPE>`, avec le message tel quel pour donnée. Un
+  message ajouté au protocole a donc aussitôt son événement.
+- Une couche reçoit le bus sous le type `AppEventBus` et ne publie que les événements de sa
+  ligne dans le tableau. Pour un nouvel événement, l'ajouter au catalogue : le compilateur
+  refuse un nom ou une donnée qui n'y figure pas.
+- Ce catalogue est une première version, à faire évoluer avec les couches `state/`, `input/`
+  et `ui/` quand elles arriveront.
 
 ## Types partagés avec le serveur
 
@@ -211,7 +241,8 @@ Le client ne dépend d'aucun workspace npm : il garde son propre
 
 Le client doit pouvoir tourner et être testé sans serveur. Toutes les couches
 parlent à une `IGameConnection` (`src/network/IGameConnection.ts`) sans savoir si
-elle est réelle ou simulée ; le choix se fera en un seul point, au démarrage.
+elle est réelle ou simulée ; le choix se fait en un seul point, au démarrage
+(`createConnection`, dans `src/App.ts`).
 
 | Méthode              | Rôle                                                                             |
 | -------------------- | -------------------------------------------------------------------------------- |
@@ -257,8 +288,67 @@ Points à connaître :
 - En test, les minuteurs simulés de Vitest (`vi.useFakeTimers()`) évitent d'attendre
   les délais : voir `tests/integration/mock-session.test.ts`.
 
+## Assemblage (`App.ts`)
+
+`src/App.ts` est le seul endroit qui crée le bus et qui choisit la connexion. Il les relie
+dans les deux sens, puis ouvre la connexion ; `src/main.ts` se contente de le démarrer.
+
+```ts
+const app = new App(); // connexion choisie par la configuration
+app.bus.on('server:LOBBY_STATUS', ({ players }) => console.log(players)); // avant start()
+await app.start();
+// ...
+app.stop();
+```
+
+| Élément                    | Rôle                                                                             |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| `app.bus`                  | Le bus de l'application, à transmettre aux couches                               |
+| `app.start()`              | Pose le pont connexion ↔ bus, ouvre la connexion, publie `connection:opened`     |
+| `app.stop()`               | Défait le pont, ferme la connexion, publie `connection:closed`                   |
+| `createConnection(mode)`   | Le point de choix entre serveur simulé et serveur réel                           |
+| `network/connectionBridge` | Le pont : message reçu → `server:<TYPE>` ; `input:join` / `input:move` → message |
+
+La connexion se règle avec la variable `VITE_CONNECTION_MODE`, lue dans `src/config.ts` au
+moment du build ou du lancement de `npm run dev` (dans un fichier `client/.env.local`, par
+exemple) :
+
+| Valeur   | Connexion                                                                                  |
+| -------- | ------------------------------------------------------------------------------------------ |
+| `mock`   | Par défaut : `MockServerAdapter`, qui rejoue le scénario `game-session` (hors ligne)       |
+| `server` | Serveur réel à l'adresse `SERVER_URL`. Pas encore disponible : `new App()` lève une erreur |
+
+Points à connaître :
+
+- `start()` ne rejette jamais sa promesse : si la connexion ne s'ouvre pas,
+  `connection:error` est publié et l'application reste arrêtée ; un nouveau `start()` réessaie.
+  Après `stop()`, `start()` rouvre la connexion (le mock rejoue son scénario depuis le début).
+- Un envoi qui échoue (connexion fermée) est publié sur `connection:error` : la couche qui a
+  publié la demande ne reçoit pas d'exception.
+- **Provisoire, à trancher avec le Backend** : `MOVE` exige un `playerId`, mais aucun message
+  du serveur ne dit au client lequel est le sien. En attendant, le pont retient celui du
+  premier `PLAYER_JOINED` reçu après l'envoi de `JOIN_LOBBY`, et n'envoie aucun `MOVE` avant.
+  Avec le mock, qui ne réagit pas à ce qu'on lui envoie, c'est le prochain joueur du scénario.
+- `input:bomb` n'est pas envoyé au serveur : `shared/` n'a pas de message pour poser une bombe.
+- `IGameConnection` ne signale pas une coupure venue du serveur : `connection:closed` n'est
+  publié que par `stop()`. À compléter avec la connexion WebSocket réelle.
+- Le mode par défaut est `mock`, y compris dans l'exécutable produit par `npm run tauri build` :
+  il faudra construire avec `VITE_CONNECTION_MODE=server` quand la connexion réelle existera.
+- Pour tester une couche, lui donner un `EventBus<AppEvents>` neuf ; pour tester l'assemblage,
+  passer sa propre connexion : `new App(new MockServerAdapter(lobbyScenario))`. Voir
+  `tests/integration/app-wiring.test.ts`.
+
 ## État d'avancement
 
-Ce squelette contient l'outillage, la structure et l'`EventBus`. Arrivent dans
-des PR dédiées : la couche réseau avec son `MockServerAdapter`, le rendu PixiJS,
-puis l'assemblage des couches dans `App.ts`.
+En place : l'outillage, l'`EventBus` et son catalogue d'événements, la connexion simulée
+(`MockServerAdapter`), le rendu PixiJS, les écrans (connexion, salle d'attente, partie) et
+`App.ts`, qui relie la connexion au bus.
+
+Pas encore relié : les écrans de `main.ts` et `GameScene` n'utilisent ni le bus ni la
+connexion. La partie affichée est simulée dans `GameScene`, de façon provisoire ; les
+événements du mock circulent sur le bus sans que personne ne les écoute. Les dossiers
+`state/`, `input/` et `ui/` sont vides.
+
+Arrivent dans des PR dédiées : l'état du jeu (`state/GameState`), le clavier (`input/`), les
+écrans branchés sur le bus (`ui/`), la connexion WebSocket réelle (`WebSocketClient`), puis
+`GameScene` réduite au dessin de l'état reçu.
