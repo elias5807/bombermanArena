@@ -1,4 +1,6 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
+import type { GameStateMessage } from '@shared/protocol/messages';
+import type { AppEventBus, Direction } from '../../core/AppEvents';
 import { GridLayout, type GridSize, type Viewport } from '../GridLayout';
 import type { SpriteKey, SpriteTextures } from '../sprites/loadSprites';
 import type { Scene } from './Scene';
@@ -7,6 +9,8 @@ import type { Scene } from './Scene';
 const MARGIN = 16;
 const BORDER_COLOR = 0x111315;
 const BORDER_WIDTH = 4;
+
+const PLAYER_TEXTURE_KEYS: SpriteKey[] = ['player1', 'player2', 'player3', 'player4'];
 
 /** Un joueur de la partie : sa case (`r` = ligne, `c` = colonne), son score et son sprite. */
 export interface PlayerState {
@@ -33,22 +37,15 @@ export interface GameCallbacks {
 }
 
 /**
- * Scène de la partie : dessine le plateau avec les sprites (sol, murs, blocs cassables,
- * bombes, explosions, joueurs), dans un cadre.
+ * Scène de la partie : affiche le plateau avec les sprites PixiJS (sol, murs, blocs,
+ * bombes, explosions, joueurs) sous l'autorité stricte du serveur.
  *
- * Le plateau est recalculé et redessiné à chaque changement de taille de la zone
- * d'affichage, pour garder des cases entières. Les textures viennent de l'appelant : la
- * scène ne charge aucune image, elle se construit donc sans navigateur.
- *
- * Provisoire : la scène simule aussi la partie (carte tirée au hasard, déplacements,
- * bombes, rivaux automatiques, scores), en attendant que l'état du jeu vienne du serveur
- * (voir « Architecture » dans le README). Les rivaux démarrent dès la construction et
- * s'arrêtent avec `destroy`.
- *
- * @example
- * const scene = new GameScene({ columns: 15, rows: 13 }, await loadSprites());
- * renderer.setScene(scene);
- * scene.handleInput('ArrowRight'); // déplace le joueur local d'une case
+ * Principes architecturaux (SOLID) :
+ * - Séparation stricte : Aucun import réseau direct (règle ESLint respectée).
+ * - Communication découplée : Écoute du bus d'événements interne (`network:playerMoved`, `network:gameState`).
+ * - Autorité serveur : Suppression des déplacements locaux arbitraires ; la scène n'est qu'un récepteur
+ *   d'affichage projetant l'état du serveur sur la grille via `GridLayout`.
+ * - Gestion du cycle de vie : Instanciation, mise à jour, suppression et nettoyage (destruction) des Sprites.
  */
 export class GameScene implements Scene {
   readonly view = new Container();
@@ -56,7 +53,7 @@ export class GameScene implements Scene {
   private readonly grid: GridSize;
   private readonly border = new Graphics();
 
-  // Ordre d'affichage (z-index)
+  // Ordre d'affichage (z-index des couches PixiJS)
   private readonly floorLayer = new Container();
   private readonly wallsLayer = new Container();
   private readonly entitiesLayer = new Container();
@@ -66,8 +63,14 @@ export class GameScene implements Scene {
   // 0 = vide, 1 = incassable, 2 = cassable
   private map: number[][] = [];
 
-  /** Les quatre joueurs : le premier est le joueur local, les autres des rivaux automatiques. */
+  /** Joueurs synchronisés par le serveur autoritaire. */
   public players: PlayerState[] = [];
+
+  /**
+   * Instances de Sprite persistantes associées aux joueurs (clé: playerId).
+   * Évite de détruire et réallouer des sprites à chaque frame ou événement réseau.
+   */
+  private readonly playerSprites = new Map<string, Sprite>();
 
   private bombs: { r: number; c: number; ownerId: string; ticking: boolean }[] = [];
   private explosions: { r: number; c: number }[] = [];
@@ -76,24 +79,35 @@ export class GameScene implements Scene {
 
   private callbacks: GameCallbacks | undefined;
   private isGameOver = false;
-  private botInterval: ReturnType<typeof setInterval> | null = null;
+
+  private bus: AppEventBus | undefined;
+  private unregisterBusListeners: (() => void) | undefined;
 
   /**
-   * @param grid Dimensions du plateau, en cases. Les joueurs partent à une case de chaque
-   *   coin : en dessous de 3 × 3, ils sont placés hors du plateau.
+   * @param grid Dimensions du plateau, en cases.
    * @param textures Textures des sprites, chargées par `loadSprites`.
-   * @param callbacks Fonctions prévenues des scores, des éliminations et de la fin de partie.
+   * @param busOrCallbacks Bus d'événements de l'application (ou callbacks pour rétrocompatibilité).
+   * @param callbacks Fonctions prévenues des événements de jeu.
    * @param initialPlayerName Nom du joueur local.
    */
   constructor(
     grid: GridSize,
     textures: SpriteTextures,
+    busOrCallbacks?: AppEventBus | GameCallbacks,
     callbacks?: GameCallbacks,
     initialPlayerName: string = 'Vous',
   ) {
     this.grid = grid;
     this.textures = textures;
-    this.callbacks = callbacks;
+
+    // Détection polymorphe pour supporter à la fois new GameScene(grid, textures, bus)
+    // et l'ancienne signature new GameScene(grid, textures, callbacks)
+    if (busOrCallbacks && 'on' in busOrCallbacks) {
+      this.bus = busOrCallbacks;
+      this.callbacks = callbacks;
+    } else {
+      this.callbacks = busOrCallbacks as GameCallbacks | undefined;
+    }
 
     this.view.addChild(this.floorLayer);
     this.view.addChild(this.wallsLayer);
@@ -102,7 +116,227 @@ export class GameScene implements Scene {
 
     this.initPlayers(initialPlayerName);
     this.generateMap();
-    this.startBotAI();
+
+    if (this.bus) {
+      this.bindEventBus(this.bus);
+    }
+  }
+
+  /**
+   * Abonne la scène aux événements du bus d'événements (EventBus).
+   * Retourne la fonction de nettoyage permettant d'annuler les abonnements.
+   */
+  public bindEventBus(bus: AppEventBus): () => void {
+    this.unbindEventBus();
+    this.bus = bus;
+
+    const unsubs = [
+      bus.on('network:playerMoved', (payload) => this.handlePlayerMoved(payload)),
+      bus.on('network:gameState', (message) => this.handleGameState(message)),
+      // Prise en charge également des événements génériques server:*
+      bus.on('server:POSITION_UPDATED', (message) =>
+        this.handlePlayerMoved({
+          playerId: message.playerId,
+          col: message.col,
+          row: message.row,
+          direction: message.direction,
+        }),
+      ),
+      bus.on('server:GAME_STATE', (message) => this.handleGameState(message)),
+    ];
+
+    const unbind = () => {
+      for (const unsub of unsubs) {
+        unsub();
+      }
+      this.unregisterBusListeners = undefined;
+    };
+
+    this.unregisterBusListeners = unbind;
+    return unbind;
+  }
+
+  /**
+   * Désabonne la scène du bus d'événements pour éviter les fuites mémoire.
+   */
+  public unbindEventBus(): void {
+    if (this.unregisterBusListeners) {
+      this.unregisterBusListeners();
+      this.unregisterBusListeners = undefined;
+    }
+  }
+
+  /**
+   * Réception d'un déplacement validé par le serveur autoritaire.
+   * Met à jour les coordonnées logiques et déplace le Sprite correspondant.
+   */
+  public handlePlayerMoved(payload: {
+    playerId: string;
+    col: number;
+    row: number;
+    direction?: Direction;
+  }): void {
+    let player = this.players.find((p) => p.id === payload.playerId);
+
+    if (!player) {
+      // Si le joueur n'a pas encore été déclaré via GAME_STATE, on crée son état
+      const index = this.players.length;
+      player = {
+        id: payload.playerId,
+        name: `Joueur ${index + 1}`,
+        r: payload.row,
+        c: payload.col,
+        alive: true,
+        score: 0,
+        textureKey: PLAYER_TEXTURE_KEYS[index % PLAYER_TEXTURE_KEYS.length],
+      };
+      this.players.push(player);
+    } else {
+      // Mise à jour de la position logique dictée par le serveur
+      player.c = payload.col;
+      player.r = payload.row;
+    }
+
+    // Mise à jour de la position visuelle du Sprite
+    this.updatePlayerSpritePosition(player, payload.direction);
+  }
+
+  /**
+   * Synchronisation initiale ou périodique de l'état complet du jeu par le serveur autoritaire.
+   * Crée, déplace ou supprime les sprites selon la présence des joueurs dans le message.
+   */
+  public handleGameState(message: GameStateMessage): void {
+    const activePlayerIds = new Set(message.players.map((p) => p.playerId));
+
+    // 1. Suppression des sprites des joueurs absents de l'état serveur
+    for (const [id, sprite] of this.playerSprites.entries()) {
+      if (!activePlayerIds.has(id)) {
+        this.entitiesLayer.removeChild(sprite);
+        sprite.destroy();
+        this.playerSprites.delete(id);
+      }
+    }
+
+    // 2. Mise à jour de la liste des joueurs
+    this.players = message.players.map((dto, index) => {
+      const existing = this.players.find((p) => p.id === dto.playerId);
+      const textureKey = (existing?.textureKey ??
+        PLAYER_TEXTURE_KEYS[index % PLAYER_TEXTURE_KEYS.length]) as SpriteKey;
+
+      return {
+        id: dto.playerId,
+        name: dto.name ?? existing?.name ?? `Joueur ${index + 1}`,
+        r: dto.row,
+        c: dto.col,
+        alive: dto.alive ?? true,
+        score: dto.score ?? existing?.score ?? 0,
+        textureKey,
+      };
+    });
+
+    // 3. Synchronisation visuelle de tous les sprites avec la disposition actuelle
+    this.syncPlayerSprites();
+  }
+
+  /**
+   * Positionne le sprite d'un joueur à l'écran en utilisant GridLayout pour convertir
+   * les coordonnées de grille (col, row) en pixels réels (x, y).
+   *
+   * =========================================================================================
+   * NOTE D'INTERPOLATION (Client-Side Interpolation / LERP) :
+   * =========================================================================================
+   * Dans une architecture multijoueur temps réel (ex: 20 ticks réseau par seconde), modifier
+   * brutalement `sprite.x` et `sprite.y` produit des saccades visuelles ("snapping").
+   *
+   * Pour obtenir un déplacement fluide entre deux cases sans attendre le prochain tick :
+   *
+   * 1. Stocker la position cible sur une structure de données d'interpolation :
+   *    ```ts
+   *    entity.targetX = targetPixelX;
+   *    entity.targetY = targetPixelY;
+   *    ```
+   *
+   * 2. Dans la boucle de rendu PixiJS (via `app.ticker.add((ticker) => ...)` ou Scene.update) :
+   *    ```ts
+   *    const delta = ticker.deltaTime;
+   *    const lerpFactor = 0.25; // Facteur de lissage exponentiel (ou vitesse * dt)
+   *    sprite.x += (entity.targetX - sprite.x) * lerpFactor;
+   *    sprite.y += (entity.targetY - sprite.y) * lerpFactor;
+   *    ```
+   *
+   * 3. Animation de marche :
+   *    Si `direction` est fournie ('up' | 'down' | 'left' | 'right'), commuter les textures
+   *    ou frames d'un `AnimatedSprite` pour animer les pas tant que la distance > seuil.
+   * =========================================================================================
+   */
+  private updatePlayerSpritePosition(player: PlayerState, direction?: Direction): void {
+    if (!this.currentLayout) {
+      return;
+    }
+
+    // L'orientation du joueur pourra adapter la texture lors de l'ajout des sprites animés
+    if (direction) {
+      // Ex: this.updateSpriteDirection(sprite, direction);
+    }
+
+    let sprite = this.playerSprites.get(player.id);
+
+    // Si le joueur est éliminé, on supprime son sprite
+    if (!player.alive) {
+      if (sprite) {
+        this.entitiesLayer.removeChild(sprite);
+        sprite.destroy();
+        this.playerSprites.delete(player.id);
+      }
+      return;
+    }
+
+    // Création à la volée du Sprite s'il n'existe pas encore
+    if (!sprite) {
+      const tex = this.textures[player.textureKey];
+      if (!tex) return;
+      sprite = new Sprite(tex);
+      this.playerSprites.set(player.id, sprite);
+      this.entitiesLayer.addChild(sprite);
+    } else if (sprite.parent !== this.entitiesLayer) {
+      this.entitiesLayer.addChild(sprite);
+    }
+
+    this.applySpriteLayout(sprite, player, this.currentLayout);
+  }
+
+  /**
+   * Calcule et applique les dimensions et coordonnées pixels exactes du sprite
+   * à l'aide de GridLayout.
+   */
+  private applySpriteLayout(sprite: Sprite, player: PlayerState, layout: GridLayout): void {
+    const tex = sprite.texture;
+    const size = layout.cellSize;
+    const cellOrigin = layout.cellOrigin({ column: player.c, row: player.r });
+
+    // Mise à l'échelle proportionnelle à la taille de case (textures de référence en 16px)
+    const width = (tex.width / 16) * size;
+    const height = (tex.height / 16) * size;
+    sprite.width = width;
+    sprite.height = height;
+
+    // Centrage horizontal dans la case et calage au sol (pieds du personnage en bas de case)
+    const targetPixelX = cellOrigin.x + (size - width) / 2;
+    const targetPixelY = cellOrigin.y + size - height;
+
+    sprite.x = targetPixelX;
+    sprite.y = targetPixelY;
+  }
+
+  /**
+   * Synchronise tous les sprites de joueurs avec le GridLayout courant.
+   */
+  private syncPlayerSprites(): void {
+    if (!this.currentLayout) return;
+
+    for (const player of this.players) {
+      this.updatePlayerSpritePosition(player);
+    }
   }
 
   private initPlayers(p1Name: string) {
@@ -143,18 +377,18 @@ export class GameScene implements Scene {
       this.map[r] = [];
       for (let c = 0; c < this.grid.columns; c++) {
         if (r === 0 || r === this.grid.rows - 1 || c === 0 || c === this.grid.columns - 1) {
-          this.map[r][c] = 1; // Bordures
+          this.map[r][c] = 1; // Bordures incassables
         } else if (r % 2 === 0 && c % 2 === 0) {
-          this.map[r][c] = 1; // Piliers
+          this.map[r][c] = 1; // Piliers incassables
         } else {
-          // Zones de spawn dégagées dans les 4 coins
+          // Spawns dégagés dans les coins
           const isP1Spawn = r < 3 && c < 3;
           const isP2Spawn = r < 3 && c >= this.grid.columns - 3;
           const isP3Spawn = r >= this.grid.rows - 3 && c < 3;
           const isP4Spawn = r >= this.grid.rows - 3 && c >= this.grid.columns - 3;
 
           if (!isP1Spawn && !isP2Spawn && !isP3Spawn && !isP4Spawn && Math.random() < 0.35) {
-            this.map[r][c] = 2; // Bloc cassable
+            this.map[r][c] = 2; // Bloc destructible
           } else {
             this.map[r][c] = 0; // Sol vide
           }
@@ -164,107 +398,40 @@ export class GameScene implements Scene {
   }
 
   /**
-   * Intelligence Artificielle simple pour animer les rivaux P2, P3, P4
+   * Traitement des entrées joueur.
+   * Architecture autoritaire : la scène N'APPLIQUE AUCUN déplacement localement.
+   * Elle transmet l'intention du joueur sur le bus (`input:move`, `input:bomb`)
+   * pour expédition vers le serveur.
    */
-  private startBotAI() {
-    if (this.botInterval) clearInterval(this.botInterval);
-    this.botInterval = setInterval(() => {
-      if (this.isGameOver) return;
-      this.updateBots();
-    }, 750);
-  }
-
-  private updateBots() {
-    const dirs = [
-      { dr: -1, dc: 0 },
-      { dr: 1, dc: 0 },
-      { dr: 0, dc: -1 },
-      { dr: 0, dc: 1 },
-    ];
-
-    for (let i = 1; i < this.players.length; i++) {
-      const bot = this.players[i];
-      if (!bot.alive) continue;
-
-      // Déplacements possibles
-      const valid = dirs.filter((d) => {
-        const nr = bot.r + d.dr;
-        const nc = bot.c + d.dc;
-        if (nr < 0 || nr >= this.grid.rows || nc < 0 || nc >= this.grid.columns) return false;
-        if (this.map[nr][nc] !== 0) return false;
-        if (this.bombs.some((b) => b.r === nr && b.c === nc)) return false;
-        return true;
-      });
-
-      if (valid.length > 0) {
-        const choice = valid[Math.floor(Math.random() * valid.length)];
-        bot.r += choice.dr;
-        bot.c += choice.dc;
-      }
-
-      // Possibilité de poser une bombe si adjacent à une brique cassable
-      const nearBrick = dirs.some((d) => {
-        const nr = bot.r + d.dr;
-        const nc = bot.c + d.dc;
-        return (
-          nr >= 0 &&
-          nr < this.grid.rows &&
-          nc >= 0 &&
-          nc < this.grid.columns &&
-          this.map[nr][nc] === 2
-        );
-      });
-
-      if (nearBrick && Math.random() < 0.2) {
-        this.placeBomb(bot);
-      }
-    }
-
-    this.redrawEntities();
-  }
-
-  /**
-   * Applique une touche au joueur local : une flèche (`ArrowUp`, `ArrowDown`, `ArrowLeft`,
-   * `ArrowRight`) le déplace d'une case si elle est libre (ni mur, ni bloc, ni bombe), espace
-   * (`' '`) pose une bombe. Sans effet si le joueur est éliminé ou la partie terminée.
-   */
-  public handleInput(key: string) {
+  public handleInput(key: string): void {
     if (this.isGameOver) return;
 
-    const p1 = this.players[0];
-    if (!p1 || !p1.alive) return;
-
-    let dc = 0;
-    let dr = 0;
-
-    if (key === 'ArrowUp') dr = -1;
-    else if (key === 'ArrowDown') dr = 1;
-    else if (key === 'ArrowLeft') dc = -1;
-    else if (key === 'ArrowRight') dc = 1;
-    else if (key === ' ') {
-      this.placeBomb(p1);
+    if (key === ' ') {
+      if (this.bus) {
+        this.bus.emit('input:bomb');
+      } else {
+        // Fallback local uniquement si la scène est testée de manière isolée sans bus
+        const p1 = this.players[0];
+        if (p1 && p1.alive) this.placeBomb(p1);
+      }
       return;
     }
 
-    if (dr !== 0 || dc !== 0) {
-      const nr = p1.r + dr;
-      const nc = p1.c + dc;
+    const keyToDirection: Record<string, Direction> = {
+      ArrowUp: 'up',
+      ArrowDown: 'down',
+      ArrowLeft: 'left',
+      ArrowRight: 'right',
+    };
 
-      if (nr >= 0 && nr < this.grid.rows && nc >= 0 && nc < this.grid.columns) {
-        const isBomb = this.bombs.some((b) => b.r === nr && b.c === nc);
-        if (this.map[nr][nc] === 0 && !isBomb) {
-          p1.r = nr;
-          p1.c = nc;
-          this.redrawEntities();
-        }
-      }
+    const direction = keyToDirection[key];
+    if (direction && this.bus) {
+      this.bus.emit('input:move', { direction });
     }
   }
 
   /**
-   * Pose une bombe sur la case de `player`, sauf s'il y en a déjà une. Elle explose 2,5 s
-   * plus tard, sur sa case et les quatre cases voisines, sauf les murs incassables. Sans
-   * effet si le joueur est éliminé ou la partie terminée.
+   * Dépose une bombe sur la case indiquée.
    */
   public placeBomb(player: PlayerState) {
     if (!player.alive || this.isGameOver) return;
@@ -278,13 +445,11 @@ export class GameScene implements Scene {
     this.bombs.push(bomb);
     this.redrawEntities();
 
-    // Mèche qui clignote après 1.5s
     setTimeout(() => {
       bomb.ticking = true;
       this.redrawEntities();
     }, 1500);
 
-    // Détonation après 2.5s
     setTimeout(() => {
       this.bombs = this.bombs.filter((b) => b !== bomb);
       this.explode(r, c, player.id);
@@ -310,23 +475,21 @@ export class GameScene implements Scene {
       const nc = c + d[1];
       if (nr >= 0 && nr < this.grid.rows && nc >= 0 && nc < this.grid.columns) {
         if (this.map[nr][nc] === 1) {
-          // Bloqué par mur incassable
           continue;
         }
         if (this.map[nr][nc] === 2) {
-          this.map[nr][nc] = 0; // Détruit la brique
+          this.map[nr][nc] = 0;
           if (owner) {
-            owner.score += 50; // +50 pts par bloc détruit
+            owner.score += 50;
           }
         }
         newExplosions.push({ r: nr, c: nc });
 
-        // Vérifier les joueurs touchés par le souffle
         for (const p of this.players) {
           if (p.alive && p.r === nr && p.c === nc) {
             p.alive = false;
             if (owner && owner.id !== p.id) {
-              owner.score += 200; // +200 pts bonus d'élimination
+              owner.score += 200;
             }
             this.callbacks?.onPlayerEliminated?.(p.id);
           }
@@ -335,7 +498,6 @@ export class GameScene implements Scene {
     }
 
     this.callbacks?.onScoreUpdate?.(this.players.map((p) => ({ id: p.id, score: p.score })));
-
     this.explosions.push(...newExplosions);
 
     if (this.currentLayout) {
@@ -343,7 +505,6 @@ export class GameScene implements Scene {
     }
     this.redrawEntities();
 
-    // Disparition du souffle après 400ms
     setTimeout(() => {
       this.explosions = this.explosions.filter((exp) => !newExplosions.includes(exp));
       this.redrawEntities();
@@ -352,36 +513,26 @@ export class GameScene implements Scene {
     this.checkGameConditions();
   }
 
-  /**
-   * Vérifie les conditions de victoire ou d'élimination
-   */
   private checkGameConditions() {
     if (this.isGameOver) return;
 
     const p1 = this.players[0];
     const rivalsAlive = this.players.slice(1).filter((p) => p.alive);
 
-    // Défaite si P1 est mort
-    if (!p1.alive) {
+    if (p1 && !p1.alive) {
       this.endGame(null, false, "Vous avez succombé au souffle d'une bombe !");
       return;
     }
 
-    // Victoire si tous les autres rivaux sont morts
-    if (rivalsAlive.length === 0) {
+    if (rivalsAlive.length === 0 && p1) {
       this.endGame(p1, true, 'Braquage réussi ! Tous vos rivaux ont été éliminés !');
       return;
     }
   }
 
-  /**
-   * Termine la partie parce que le temps est écoulé : le joueur encore en vie qui a le plus
-   * de points gagne.
-   */
   public timeOut() {
     if (this.isGameOver) return;
 
-    // Fin du chrono : le joueur en vie avec le plus de score gagne
     const alivePlayers = this.players.filter((p) => p.alive);
     if (alivePlayers.length === 0) {
       this.endGame(null, false, 'Temps écoulé ! Aucun survivant.');
@@ -401,29 +552,18 @@ export class GameScene implements Scene {
     );
   }
 
-  /**
-   * Termine la partie, arrête les rivaux et prévient `onGameOver`. Sans effet si elle est
-   * déjà terminée.
-   */
   public endGame(winner: PlayerState | null, isVictory: boolean, reason: string) {
     if (this.isGameOver) return;
     this.isGameOver = true;
-    if (this.botInterval) clearInterval(this.botInterval);
-
     this.callbacks?.onGameOver?.({ winner, isVictory, reason });
   }
 
-  /**
-   * Relance une partie : nouvelle carte, joueurs revenus à leur case de départ, scores à zéro.
-   *
-   * @param p1Name Nom du joueur local ; par défaut, celui de la partie précédente.
-   */
   public restartGame(p1Name?: string) {
     this.isGameOver = false;
     this.bombs = [];
     this.explosions = [];
 
-    const name = p1Name || this.players[0].name;
+    const name = p1Name || this.players[0]?.name || 'Vous';
     this.initPlayers(name);
     this.generateMap();
 
@@ -431,14 +571,9 @@ export class GameScene implements Scene {
       this.drawAll();
     }
 
-    this.startBotAI();
     this.callbacks?.onScoreUpdate?.(this.players.map((p) => ({ id: p.id, score: 0 })));
   }
 
-  /**
-   * Disposition actuelle de la grille, utile pour placer des éléments sur ses cases.
-   * Absente tant que la scène n'a pas été affichée.
-   */
   get layout(): GridLayout | undefined {
     return this.currentLayout;
   }
@@ -449,9 +584,15 @@ export class GameScene implements Scene {
     this.drawAll();
   }
 
-  /** Arrête les rivaux automatiques, puis libère la vue et tout ce qu'elle dessine. */
+  /** Libère la scène, les écouteurs de bus, les sprites et toute la hiérarchie PixiJS. */
   destroy(): void {
-    if (this.botInterval) clearInterval(this.botInterval);
+    this.unbindEventBus();
+
+    for (const sprite of this.playerSprites.values()) {
+      sprite.destroy();
+    }
+    this.playerSprites.clear();
+
     this.view.destroy({ children: true });
   }
 
@@ -550,22 +691,23 @@ export class GameScene implements Scene {
       }
     }
 
-    // 3. Dessiner les joueurs vivants
-    for (const p of this.players) {
-      if (!p.alive) continue; // Les joueurs éliminés ne sont plus affichés
+    // 3. Ré-attacher et repositionner les sprites de joueurs persistants
+    for (const player of this.players) {
+      if (!player.alive) continue;
 
-      const tex = this.textures[p.textureKey];
-      if (!tex) continue;
+      let sprite = this.playerSprites.get(player.id);
+      if (!sprite) {
+        const tex = this.textures[player.textureKey];
+        if (tex) {
+          sprite = new Sprite(tex);
+          this.playerSprites.set(player.id, sprite);
+        }
+      }
 
-      const pos = layout.cellOrigin({ column: p.c, row: p.r });
-      const pSprite = new Sprite(tex);
-
-      pSprite.width = (tex.width / 16) * size;
-      pSprite.height = (tex.height / 16) * size;
-      pSprite.x = pos.x + (size - pSprite.width) / 2;
-      pSprite.y = pos.y + size - pSprite.height;
-
-      this.entitiesLayer.addChild(pSprite);
+      if (sprite) {
+        this.entitiesLayer.addChild(sprite);
+        this.applySpriteLayout(sprite, player, layout);
+      }
     }
   }
 }

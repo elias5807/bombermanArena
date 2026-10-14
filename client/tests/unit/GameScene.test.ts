@@ -1,6 +1,8 @@
 import { Sprite, Texture, TextureSource, type Container } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cell, GridLayout } from '../../src/render/GridLayout';
+import type { AppEvents } from '../../src/core/AppEvents';
+import { EventBus } from '../../src/core/EventBus';
 import { GameScene } from '../../src/render/scenes/GameScene';
 import type { SpriteTextures } from '../../src/render/sprites/loadSprites';
 
@@ -175,19 +177,40 @@ describe('GameScene', () => {
     invalid.destroy();
   });
 
-  it('fait bouger les rivaux dès sa création, et plus une fois détruite', () => {
-    const rivalStepMs = 750;
+  it('met à jour la position des joueurs sur réception de network:playerMoved, et plus une fois détruite', () => {
+    const bus = new EventBus<AppEvents>();
+    scene.bindEventBus(bus);
+    scene.resize({ width: 800, height: 600 });
+
     const rival = scene.players[1];
-    const positionOf = () => ({ r: rival.r, c: rival.c });
-    const start = positionOf();
+    bus.emit('network:playerMoved', { playerId: rival.id, col: 4, row: 3 });
 
-    vi.advanceTimersByTime(rivalStepMs);
-    const moved = positionOf();
+    expect(rival.c).toBe(4);
+    expect(rival.r).toBe(3);
+
     scene.destroy();
-    vi.advanceTimersByTime(rivalStepMs);
+    bus.emit('network:playerMoved', { playerId: rival.id, col: 5, row: 6 });
 
-    expect(moved).not.toEqual(start);
-    expect(positionOf()).toEqual(moved);
+    expect(rival.c).toBe(4);
+    expect(rival.r).toBe(3);
+  });
+
+  it("synchronise l'état et les sprites des joueurs sur réception de network:gameState", () => {
+    const bus = new EventBus<AppEvents>();
+    scene.bindEventBus(bus);
+    scene.resize({ width: 800, height: 600 });
+
+    bus.emit('network:gameState', {
+      type: 'GAME_STATE',
+      players: [
+        { playerId: 'p1', name: 'Alice', col: 2, row: 2, alive: true },
+        { playerId: 'p2', name: 'Bob', col: 8, row: 8, alive: true },
+      ],
+    });
+
+    expect(scene.players).toHaveLength(2);
+    expect(scene.players[0]).toMatchObject({ id: 'p1', c: 2, r: 2 });
+    expect(scene.players[1]).toMatchObject({ id: 'p2', c: 8, r: 8 });
   });
 
   it('libère sa vue et ce qu’elle dessine quand elle est détruite, même deux fois', () => {
