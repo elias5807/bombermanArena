@@ -31,14 +31,44 @@ export interface GameStartedMessage {
   players: string[]; // liste des playerId au démarrage
 }
 
+/**
+ * Coordonnées et état d'un joueur synchronisé sur la grille.
+ */
+export interface PlayerStateDTO {
+  playerId: string;
+  name?: string;
+  col: number;
+  row: number;
+  alive: boolean;
+  score?: number;
+}
+
+/**
+ * Message envoyé lorsqu'un joueur se déplace avec validation autoritaire du serveur.
+ */
 export interface PositionUpdatedMessage {
   type: 'POSITION_UPDATED';
   playerId: string;
-  position: string; // a affiner plus tard
+  col: number;
+  row: number;
+  direction?: 'up' | 'down' | 'left' | 'right';
+}
+
+/**
+ * Message de synchronisation d'état complet du jeu (au démarrage ou après reconnexion).
+ */
+export interface GameStateMessage {
+  type: 'GAME_STATE';
+  players: PlayerStateDTO[];
+  grid?: {
+    columns: number;
+    rows: number;
+  };
 }
 
 export type ServerMessage =
   | PlayerJoinedMessage
   | LobbyStatusMessage
   | GameStartedMessage
-  | PositionUpdatedMessage;
+  | PositionUpdatedMessage
+  | GameStateMessage;

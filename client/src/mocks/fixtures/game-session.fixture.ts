@@ -4,20 +4,18 @@ import { MOCK_PLAYERS, joinLobbySteps } from '../lobbySteps';
 const [alice, bob, chloe, david] = MOCK_PLAYERS;
 
 /** Déplacement confirmé par le serveur, que tous les joueurs reçoivent. */
-function positionUpdate(playerId: string, position: string): ScenarioStep {
-  return { delayMs: 500, message: { type: 'POSITION_UPDATED', playerId, position } };
+function positionUpdate(
+  playerId: string,
+  col: number,
+  row: number,
+  direction?: 'up' | 'down' | 'left' | 'right',
+): ScenarioStep {
+  return { delayMs: 500, message: { type: 'POSITION_UPDATED', playerId, col, row, direction } };
 }
 
 /**
  * Début de partie à quatre joueurs : le lobby se remplit, la partie démarre,
- * puis les joueurs se déplacent.
- *
- * C'est tout ce que le protocole partagé permet de décrire pour l'instant :
- * les bombes, explosions, murs détruits et la fin de partie seront ajoutés
- * quand `shared/` les définira. Le champ `position` y est encore une simple
- * chaîne (« à affiner ») ; le serveur y met aujourd'hui la direction du
- * déplacement, comme ici. Quand le format changera, le compilateur signalera
- * les valeurs à corriger.
+ * puis les joueurs se déplacent avec des coordonnées précises synchronisées.
  */
 export const gameSessionScenario: Scenario = {
   name: 'game-session',
@@ -27,11 +25,11 @@ export const gameSessionScenario: Scenario = {
       delayMs: 1000,
       message: { type: 'GAME_STARTED', players: MOCK_PLAYERS.map(({ playerId }) => playerId) },
     },
-    positionUpdate(alice.playerId, 'right'),
-    positionUpdate(bob.playerId, 'down'),
-    positionUpdate(chloe.playerId, 'left'),
-    positionUpdate(alice.playerId, 'down'),
-    positionUpdate(david.playerId, 'up'),
-    positionUpdate(bob.playerId, 'right'),
+    positionUpdate(alice.playerId, 2, 1, 'right'),
+    positionUpdate(bob.playerId, 11, 2, 'down'),
+    positionUpdate(chloe.playerId, 2, 9, 'right'),
+    positionUpdate(alice.playerId, 2, 2, 'down'),
+    positionUpdate(david.playerId, 11, 8, 'up'),
+    positionUpdate(bob.playerId, 10, 2, 'left'),
   ],
 };

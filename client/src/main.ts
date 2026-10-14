@@ -50,10 +50,17 @@ btnShowHelpLogin.addEventListener('click', showHelp);
 btnShowHelpGame.addEventListener('click', showHelp);
 btnCloseHelp.addEventListener('click', hideHelp);
 
+// Initialisation du bus et de la connexion
+const app = new App();
+void app.start();
+
 // Actions Login -> Lobby
 btnLogin.addEventListener('click', () => {
   const pseudo = pseudoInput.value.trim() || 'VoleurInconnu';
-  lobbyMyName.textContent = `P1: ${pseudo}`; // Met à jour le nom dans le lobby
+  lobbyMyName.textContent = `P1: ${pseudo}`;
+
+  // Notification au serveur via le bus d'événements
+  app.bus.emit('input:join', { playerName: pseudo });
 
   // Transition vers la salle d'attente
   loginScreen.classList.add('hidden');
@@ -74,12 +81,12 @@ btnStartGame.addEventListener('click', () => {
   lobbyScreen.classList.add('hidden');
   gameScreen.classList.remove('hidden');
 
-  // Initialisation du moteur de jeu
+  // Initialisation du moteur de jeu et abonnement de la scène au bus d'événements
   if (!renderer && canvasContainer) {
     PixiRenderer.create(canvasContainer)
       .then(async (r) => {
         renderer = r;
-        currentScene = new GameScene(DEMO_GRID, await loadSprites());
+        currentScene = new GameScene(DEMO_GRID, await loadSprites(), app.bus);
         r.setScene(currentScene);
       })
       .catch((error: unknown) => {
@@ -103,6 +110,3 @@ window.addEventListener('keydown', (e) => {
     }
   }
 });
-
-// Démarre le bus et la connexion (simulée par défaut) ; les écrans ne s'en servent pas encore.
-void new App().start();

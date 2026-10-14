@@ -34,7 +34,9 @@ export function startConnectionManager(port: number): WebSocketServer {
           const response: ServerMessage = {
             type: 'POSITION_UPDATED',
             playerId: message.playerId,
-            position: message.direction,
+            col: 1, // Coordonnées logiques calculées par l'autorité serveur
+            row: 1,
+            direction: message.direction,
           };
           socket.send(JSON.stringify(response));
           break;

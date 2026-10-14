@@ -12,6 +12,7 @@ const EVENT_NAMES = [
   'server:LOBBY_STATUS',
   'server:GAME_STARTED',
   'server:POSITION_UPDATED',
+  'server:GAME_STATE',
   'input:join',
   'input:move',
   'input:bomb',
