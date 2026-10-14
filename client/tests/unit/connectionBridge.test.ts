@@ -26,6 +26,26 @@ const SERVER_MESSAGES: [event: RecordedEvent[0], message: ServerMessage][] = [
       players: [{ playerId: 'p1', col: 1, row: 1, alive: true }],
     },
   ],
+  [
+    'server:BOMB_PLACED',
+    {
+      type: 'BOMB_PLACED',
+      bombId: 'b1',
+      playerId: 'p1',
+      col: 1,
+      row: 1,
+    },
+  ],
+  [
+    'server:BOMB_EXPLODED',
+    {
+      type: 'BOMB_EXPLODED',
+      bombId: 'b1',
+      col: 1,
+      row: 1,
+      affectedCells: [{ col: 1, row: 1 }],
+    },
+  ],
 ];
 
 /** Un pont posé entre une connexion ouverte et un bus dont on enregistre les événements. */
@@ -110,12 +130,33 @@ describe('bridgeConnection', () => {
       expect(connection.sent).toEqual([{ type: 'JOIN_LOBBY', playerName: 'Louka' }]);
     });
 
-    it("n'envoie rien pour input:bomb, que le protocole partagé ne décrit pas encore", () => {
+    it("n'envoie rien pour input:bomb tant que le joueur n'a pas rejoint le lobby", () => {
       const { connection, bus } = setup();
 
       bus.emit('input:bomb');
 
       expect(connection.sent).toEqual([]);
+    });
+
+    it('envoie PLACE_BOMB pour input:bomb quand le joueur est dans le lobby', () => {
+      const { connection, bus } = setup();
+
+      bus.emit('input:join', { playerName: 'Alice' });
+      connection.receive(playerJoined(ALICE));
+      bus.emit('input:bomb');
+
+      expect(connection.sent).toEqual([
+        { type: 'JOIN_LOBBY', playerName: 'Alice' },
+        { type: 'PLACE_BOMB', playerId: 'p1' },
+      ]);
+    });
+
+    it('envoie START_GAME pour input:start', () => {
+      const { connection, bus } = setup();
+
+      bus.emit('input:start');
+
+      expect(connection.sent).toEqual([{ type: 'START_GAME' }]);
     });
 
     it("publie connection:error quand l'envoi échoue, sans faire échouer la publication", () => {

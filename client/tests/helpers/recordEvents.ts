@@ -13,9 +13,12 @@ const EVENT_NAMES = [
   'server:GAME_STARTED',
   'server:POSITION_UPDATED',
   'server:GAME_STATE',
+  'server:BOMB_PLACED',
+  'server:BOMB_EXPLODED',
   'input:join',
   'input:move',
   'input:bomb',
+  'input:start',
 ] as const satisfies readonly (keyof AppEvents)[];
 
 /**
