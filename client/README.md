@@ -198,16 +198,20 @@ annonce, `input:` ce que le joueur demande.
 
 | Événement                 | Donnée                   | Publié par                                        | Écouté par                            |
 | ------------------------- | ------------------------ | ------------------------------------------------- | ------------------------------------- |
-| `connection:opened`       | —                        | `App`, une fois la connexion ouverte              | à venir : `ui/`                       |
-| `connection:closed`       | —                        | `App.stop()`, si la connexion était ouverte       | à venir : `ui/`                       |
-| `connection:error`        | `{ error }`              | `App` (ouverture impossible), pont (envoi échoué) | à venir : `ui/`                       |
-| `server:PLAYER_JOINED`    | `PlayerJoinedMessage`    | pont connexion ↔ bus, à la réception du message   | à venir : `state/`                    |
-| `server:LOBBY_STATUS`     | `LobbyStatusMessage`     | pont connexion ↔ bus, à la réception du message   | à venir : `state/`                    |
-| `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | à venir : `state/`                    |
-| `server:POSITION_UPDATED` | `PositionUpdatedMessage` | pont connexion ↔ bus, à la réception du message   | à venir : `state/`                    |
-| `input:join`              | `{ playerName }`         | à venir : `ui/` (écran de connexion)              | pont, qui envoie `JOIN_LOBBY`         |
-| `input:move`              | `{ direction }`          | à venir : `input/` (clavier)                      | pont, qui envoie `MOVE`               |
-| `input:bomb`              | —                        | à venir : `input/` (clavier)                      | personne : aucun message dans shared/ |
+| `connection:opened`       | —                        | `App`, une fois la connexion ouverte              | `main.ts`, `ui/`                      |
+| `connection:closed`       | —                        | `App.stop()`, si la connexion était ouverte       | `ui/`                                 |
+| `connection:error`        | `{ error }`              | `App` (ouverture impossible), pont (envoi échoué) | `ui/`                                 |
+| `server:PLAYER_JOINED`    | `PlayerJoinedMessage`    | pont connexion ↔ bus, à la réception du message   | `state/`, pont (détection playerId)   |
+| `server:LOBBY_STATUS`     | `LobbyStatusMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (affichage salon), `state/` |
+| `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (lancement de partie)       |
+| `server:GAME_STATE`       | `GameStateMessage`       | pont connexion ↔ bus, à la réception du message   | `GameScene` (carte et joueurs)        |
+| `server:POSITION_UPDATED` | `PositionUpdatedMessage` | pont connexion ↔ bus, à la réception du message   | `GameScene` (déplacement du sprite)   |
+| `server:BOMB_PLACED`      | `BombPlacedMessage`      | pont connexion ↔ bus, à la réception du message   | `GameScene` (affichage bombe posée)   |
+| `server:BOMB_EXPLODED`    | `BombExplodedMessage`    | pont connexion ↔ bus, à la réception du message   | `GameScene` (souffle, briques, morts) |
+| `input:join`              | `{ playerName }`         | `main.ts` (écran de connexion)                    | pont, qui envoie `JOIN_LOBBY`         |
+| `input:move`              | `{ direction }`          | `GameScene` (clavier)                             | pont, qui envoie `MOVE`               |
+| `input:bomb`              | —                        | `GameScene` (clavier)                             | pont, qui envoie `PLACE_BOMB`         |
+| `input:start`             | —                        | `main.ts` (bouton lancer partie)                  | pont, qui envoie `START_GAME`         |
 
 Points à connaître :
 
