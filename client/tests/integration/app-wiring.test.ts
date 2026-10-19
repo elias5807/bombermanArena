@@ -14,8 +14,10 @@ function serverEventsOf(steps: readonly ScenarioStep[]): RecordedEvent[] {
 async function loadClientWithMode(mode: string) {
   vi.stubEnv('VITE_CONNECTION_MODE', mode);
   vi.resetModules();
-  const { App: ConfiguredApp } = await import('../../src/App');
-  return { ConfiguredApp };
+  const { App: ConfiguredApp, createConnection } = await import('../../src/App');
+  const { CONNECTION_MODE } = await import('../../src/config');
+  const { WebSocketClient } = await import('../../src/network/WebSocketClient');
+  return { ConfiguredApp, createConnection, CONNECTION_MODE, WebSocketClient };
 }
 
 describe('application assemblée : serveur simulé → bus', () => {
@@ -124,6 +126,12 @@ describe('application assemblée : serveur simulé → bus', () => {
   });
 
   describe('choix de la connexion', () => {
+    it('sans réglage, le client se connecte au serveur réel', async () => {
+      const { createConnection, CONNECTION_MODE, WebSocketClient } = await loadClientWithMode('');
+
+      expect(createConnection(CONNECTION_MODE)).toBeInstanceOf(WebSocketClient);
+    });
+
     it('en mode mock, le client rejoue une partie hors ligne quand le joueur rejoint le salon', async () => {
       const { ConfiguredApp } = await loadClientWithMode('mock');
       const app = new ConfiguredApp();

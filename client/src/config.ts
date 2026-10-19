@@ -15,8 +15,11 @@ export const SERVER_URL: string = import.meta.env.VITE_SERVER_URL || DEFAULT_SER
 /** Connexions possibles : serveur simulé (`mock`, hors ligne) ou serveur réel (`server`). */
 export type ConnectionMode = 'mock' | 'server';
 
-/** Connexion par défaut : le serveur simulé, pour lancer le client sans serveur. */
-export const DEFAULT_CONNECTION_MODE: ConnectionMode = 'mock';
+/**
+ * Connexion par défaut : le serveur réel, en développement comme dans l'exécutable.
+ * Le serveur simulé se demande explicitement (`npm run dev:mock`).
+ */
+export const DEFAULT_CONNECTION_MODE: ConnectionMode = 'server';
 
 function readConnectionMode(value: string | undefined): ConnectionMode {
   if (!value) {
@@ -37,7 +40,8 @@ function readConnectionMode(value: string | undefined): ConnectionMode {
  * reste du client ne sait pas si le serveur est réel ou simulé.
  *
  * Surchargeable via la variable `VITE_CONNECTION_MODE`, dans les mêmes
- * conditions que `SERVER_URL`.
+ * conditions que `SERVER_URL`. `npm run dev:mock` la règle sur `mock` (fichier
+ * `.env.mock`, lu par `vite --mode mock`).
  */
 export const CONNECTION_MODE: ConnectionMode = readConnectionMode(
   import.meta.env.VITE_CONNECTION_MODE,
