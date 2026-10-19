@@ -13,16 +13,25 @@ export const MOCK_PLAYERS: readonly LobbyPlayer[] = [
 ];
 
 /**
- * Étapes d'un lobby où `players` arrivent l'un après l'autre, à `delayMs`
- * d'intervalle.
+ * Étapes de l'arrivée de `lobby[index]`, `delayMs` après l'étape précédente, quand
+ * les joueurs qui le précèdent dans `lobby` sont déjà là.
  *
- * Reproduit le serveur (`addPlayerToLobby`, dans `server/src/network/lobbyManager.ts`) :
- * pour chaque arrivée, `PLAYER_JOINED`, puis aussitôt un `LOBBY_STATUS` qui liste
- * tous les joueurs présents, nouveau compris.
+ * Reproduit le serveur (`GameEngine.addPlayer`, dans `server/src/game/GameEngine.ts`) :
+ * `PLAYER_JOINED`, puis aussitôt un `LOBBY_STATUS` qui liste tous les joueurs
+ * présents, nouveau compris.
  */
+export function arrivalSteps(
+  lobby: readonly LobbyPlayer[],
+  index: number,
+  delayMs: number,
+): ScenarioStep[] {
+  return [
+    { delayMs, message: { type: 'PLAYER_JOINED', ...lobby[index] } },
+    { delayMs: 0, message: { type: 'LOBBY_STATUS', players: lobby.slice(0, index + 1) } },
+  ];
+}
+
+/** Étapes d'un lobby où `players` arrivent l'un après l'autre, à `delayMs` d'intervalle. */
 export function joinLobbySteps(players: readonly LobbyPlayer[], delayMs: number): ScenarioStep[] {
-  return players.flatMap((player, index): ScenarioStep[] => [
-    { delayMs, message: { type: 'PLAYER_JOINED', ...player } },
-    { delayMs: 0, message: { type: 'LOBBY_STATUS', players: players.slice(0, index + 1) } },
-  ]);
+  return players.flatMap((_, index) => arrivalSteps(players, index, delayMs));
 }
