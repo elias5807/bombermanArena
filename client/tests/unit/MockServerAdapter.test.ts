@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, ServerMessage } from '@shared/protocol/messages';
-import { MockServerAdapter, type Scenario } from '../../src/network/MockServerAdapter';
+import {
+  MockServerAdapter,
+  type JoinScenario,
+  type Scenario,
+} from '../../src/network/MockServerAdapter';
 
 const joinedAlice: ServerMessage = { type: 'PLAYER_JOINED', playerId: 'p1', playerName: 'Alice' };
 const joinedBob: ServerMessage = { type: 'PLAYER_JOINED', playerId: 'p2', playerName: 'Bob' };
@@ -20,7 +24,7 @@ const join: ClientMessage = { type: 'JOIN_LOBBY', playerName: 'Alice' };
 const move: ClientMessage = { type: 'MOVE', playerId: 'p1', direction: 'up' };
 
 /** Crée un serveur simulé dont les messages reçus s'accumulent dans `received`. */
-function createAdapter(withScenario: Scenario = scenario) {
+function createAdapter(withScenario: Scenario | JoinScenario = scenario) {
   const adapter = new MockServerAdapter(withScenario);
   const received: ServerMessage[] = [];
   adapter.onMessage((message) => received.push(message));
@@ -307,6 +311,85 @@ describe('MockServerAdapter', () => {
       message.direction = 'down';
 
       expect(adapter.sentMessages).toEqual([move]);
+    });
+  });
+
+  describe('scénario lancé par JOIN_LOBBY', () => {
+    /** Accueille le joueur sous le nom qu'il envoie, puis Bob arrive 200 ms plus tard. */
+    const joinScenario: JoinScenario = {
+      name: 'join',
+      stepsFor: (playerName) => [
+        { delayMs: 0, message: { type: 'PLAYER_JOINED', playerId: 'p1', playerName } },
+        { delayMs: 200, message: joinedBob },
+      ],
+    };
+    const joinAs = (playerName: string): ClientMessage => ({ type: 'JOIN_LOBBY', playerName });
+    const joined = (playerName: string): ServerMessage => ({
+      type: 'PLAYER_JOINED',
+      playerId: 'p1',
+      playerName,
+    });
+
+    it('ne livre rien à la connexion : le rejeu attend JOIN_LOBBY', async () => {
+      const { adapter, received } = createAdapter(joinScenario);
+
+      await adapter.connect();
+      vi.advanceTimersByTime(10_000);
+
+      expect(received).toEqual([]);
+    });
+
+    it('rejoue, après JOIN_LOBBY, les étapes écrites pour le nom envoyé', async () => {
+      const { adapter, received } = createAdapter(joinScenario);
+      await adapter.connect();
+
+      adapter.send(joinAs('Louka'));
+      // Même sans délai, rien n'est livré pendant l'appel à send().
+      expect(received).toEqual([]);
+      vi.advanceTimersByTime(200);
+
+      expect(received).toEqual([joined('Louka'), joinedBob]);
+      expect(adapter.sentMessages).toEqual([joinAs('Louka')]);
+    });
+
+    it('ne réagit à aucun autre message', async () => {
+      const { adapter, received } = createAdapter(joinScenario);
+      await adapter.connect();
+
+      adapter.send(move);
+      adapter.send({ type: 'START_GAME' });
+      vi.advanceTimersByTime(10_000);
+
+      expect(received).toEqual([]);
+    });
+
+    it('repart du début à chaque JOIN_LOBBY', async () => {
+      const { adapter, received } = createAdapter(joinScenario);
+      await adapter.connect();
+      adapter.send(joinAs('Louka'));
+      vi.advanceTimersByTime(100);
+
+      adapter.send(joinAs('Lou'));
+      vi.advanceTimersByTime(1000);
+
+      // L'arrivée de Bob prévue par le premier rejeu n'a jamais lieu.
+      expect(received).toEqual([joined('Louka'), joined('Lou'), joinedBob]);
+    });
+
+    it('arrête le rejeu à la déconnexion, puis attend un nouveau JOIN_LOBBY', async () => {
+      const { adapter, received } = createAdapter(joinScenario);
+      await adapter.connect();
+      adapter.send(joinAs('Louka'));
+      vi.advanceTimersByTime(100);
+      adapter.disconnect();
+
+      await adapter.connect();
+      vi.advanceTimersByTime(1000);
+      expect(received).toEqual([joined('Louka')]);
+
+      adapter.send(joinAs('Louka'));
+      vi.advanceTimersByTime(200);
+      expect(received).toEqual([joined('Louka'), joined('Louka'), joinedBob]);
     });
   });
 });

@@ -15,30 +15,49 @@ export interface Scenario {
 }
 
 /**
+ * Scénario écrit pour le joueur local : rejoué quand le client envoie `JOIN_LOBBY`, et
+ * non dès la connexion, comme le vrai serveur qui ne dit rien à un client hors du lobby.
+ */
+export interface JoinScenario {
+  readonly name: string;
+  /** Les messages que reçoit le joueur `playerName` après son `JOIN_LOBBY`, dans cet ordre. */
+  stepsFor(playerName: string): readonly ScenarioStep[];
+}
+
+function isJoinScenario(scenario: Scenario | JoinScenario): scenario is JoinScenario {
+  return 'stepsFor' in scenario;
+}
+
+/**
  * Serveur simulé derrière `IGameConnection` : permet de lancer et de tester le
  * client sans serveur, avec de fausses données (mode hors ligne).
  *
- * Dès la connexion, il rejoue son scénario : chaque message est livré aux
- * abonnés une fois son délai écoulé, dans l'ordre. Après `disconnect()`, une
- * nouvelle connexion rejoue le scénario depuis le début.
+ * Il rejoue son scénario : chaque message est livré aux abonnés une fois son
+ * délai écoulé, dans l'ordre. Un `Scenario` démarre dès la connexion ; un
+ * `JoinScenario` démarre à chaque `JOIN_LOBBY` reçu, depuis le début. Après
+ * `disconnect()`, le rejeu s'arrête et reprend du début à la connexion suivante.
  *
- * Il ne réagit pas à ce que le client envoie : les réponses du vrai serveur
- * dépendent de règles de jeu que le protocole ne décrit pas encore.
+ * C'est sa seule réaction : le reste de ce que le client envoie est seulement
+ * enregistré (`sentMessages`). Pour répondre aux déplacements ou aux bombes, il
+ * faudrait refaire les règles de jeu du serveur dans le client.
  *
  * @example
  * const connection: IGameConnection = new MockServerAdapter(gameSessionScenario);
  * connection.onMessage((message) => console.log(message.type));
  * await connection.connect();
+ * connection.send({ type: 'JOIN_LOBBY', playerName: 'Louka' }); // lance le rejeu
  */
 export class MockServerAdapter implements IGameConnection {
-  private readonly scenario: Scenario;
+  private readonly scenario: Scenario | JoinScenario;
   private readonly handlers = new Set<MessageHandler>();
   private readonly sent: ClientMessage[] = [];
   private connected = false;
+  /** Étapes du rejeu en cours. */
+  private steps: readonly ScenarioStep[] = [];
   private nextStep = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(scenario: Scenario) {
+  constructor(scenario: Scenario | JoinScenario) {
     this.scenario = scenario;
   }
 
@@ -50,8 +69,9 @@ export class MockServerAdapter implements IGameConnection {
   connect(): Promise<void> {
     if (!this.connected) {
       this.connected = true;
-      this.nextStep = 0;
-      this.scheduleNextStep();
+      if (!isJoinScenario(this.scenario)) {
+        this.replay(this.scenario.steps);
+      }
     }
     return Promise.resolve();
   }
@@ -62,6 +82,10 @@ export class MockServerAdapter implements IGameConnection {
     }
     // Une copie, comme si le message avait été sérialisé : l'appelant peut le modifier ensuite.
     this.sent.push(structuredClone(message));
+
+    if (message.type === 'JOIN_LOBBY' && isJoinScenario(this.scenario)) {
+      this.replay(this.scenario.stepsFor(message.playerName));
+    }
   }
 
   onMessage(handler: MessageHandler): () => void {
@@ -73,15 +97,27 @@ export class MockServerAdapter implements IGameConnection {
 
   disconnect(): void {
     this.connected = false;
+    this.stopReplay();
+  }
+
+  /** Rejoue `steps` depuis le début, à la place du rejeu en cours. */
+  private replay(steps: readonly ScenarioStep[]): void {
+    this.stopReplay();
+    this.steps = steps;
+    this.nextStep = 0;
+    this.scheduleNextStep();
+  }
+
+  private stopReplay(): void {
     clearTimeout(this.timer);
     this.timer = undefined;
   }
 
   private scheduleNextStep(): void {
-    if (this.nextStep >= this.scenario.steps.length) {
+    if (this.nextStep >= this.steps.length) {
       return;
     }
-    const { delayMs, message } = this.scenario.steps[this.nextStep];
+    const { delayMs, message } = this.steps[this.nextStep];
 
     this.timer = setTimeout(() => {
       this.nextStep += 1;
@@ -94,7 +130,7 @@ export class MockServerAdapter implements IGameConnection {
 
   private deliver(message: ServerMessage): void {
     // Une copie neuve, comme après le décodage d'un vrai message JSON : un abonné
-    // peut la modifier sans altérer le scénario, qui sera rejoué à la prochaine connexion.
+    // peut la modifier sans altérer le scénario, qui peut être rejoué ensuite.
     const received = structuredClone(message);
 
     // On parcourt une copie : un abonné peut s'abonner ou se désabonner pendant la livraison.
