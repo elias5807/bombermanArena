@@ -14,9 +14,10 @@ Le client est un workspace npm du dépôt : ses dépendances s'installent à la 
 ses scripts se lancent depuis `client/`.
 
 ```bash
-npm ci          # à la racine du dépôt
+npm ci            # à la racine du dépôt
 cd client
-npm run dev
+npm run dev       # avec le serveur, lancé à part (ws://localhost:3000)
+npm run dev:mock  # ou sans serveur, avec le serveur simulé
 ```
 
 Un `npm install` lancé dans `client/` n'installe pas les outils communs (TypeScript, ESLint,
@@ -27,6 +28,7 @@ Vitest, Prettier), déclarés à la racine : les scripts échouent alors faute d
 | Script                 | Rôle                                               |
 | ---------------------- | -------------------------------------------------- |
 | `npm run dev`          | Serveur de développement Vite                      |
+| `npm run dev:mock`     | Le même, hors ligne : avec le serveur simulé       |
 | `npm run build`        | Vérification des types puis build de production    |
 | `npm run preview`      | Sert le build de production en local               |
 | `npm run typecheck`    | Vérification des types seule                       |
@@ -255,40 +257,65 @@ elle est réelle ou simulée ; le choix se fait en un seul point, au démarrage
 | `onMessage(handler)` | S'abonne aux messages du serveur ; retourne la fonction qui annule l'abonnement  |
 | `disconnect()`       | Ferme la connexion ; les abonnements sont conservés                              |
 
-`MockServerAdapter` est l'implémentation simulée. Dès la connexion, il rejoue un
-**scénario** : des messages du serveur, chacun avec son délai.
+`MockServerAdapter` est l'implémentation simulée. Il rejoue un **scénario** : une liste
+d'étapes `{ delayMs, message }`, où `delayMs` est l'attente après l'étape précédente. Il en
+existe deux sortes :
+
+| Sorte          | Le rejeu démarre                          | Exemple        |
+| -------------- | ----------------------------------------- | -------------- |
+| `Scenario`     | dès la connexion                          | `lobby`        |
+| `JoinScenario` | à chaque `JOIN_LOBBY`, pour le nom envoyé | `game-session` |
 
 ```ts
 const connection: IGameConnection = new MockServerAdapter(gameSessionScenario);
 connection.onMessage((message) => console.log(message.type)); // avant connect()
 await connection.connect();
+connection.send({ type: 'JOIN_LOBBY', playerName: 'Louka' }); // lance le rejeu
 ```
+
+### Lancer le client hors ligne
+
+```bash
+cd client
+npm run dev:mock
+```
+
+`npm run dev:mock` lance Vite en mode `mock` (`vite --mode mock`), qui lit `.env.mock` :
+`VITE_CONNECTION_MODE=mock`. Le client rejoue alors `game-session` : on rejoint le salon sous
+son pseudo, trois joueurs fictifs arrivent, la partie démarre quand le salon est plein, puis
+les autres joueurs se déplacent et posent des bombes qui cassent des briques ; l'un d'eux est
+éliminé par la sienne.
 
 Scénarios fournis (`src/mocks/fixtures/`) :
 
-| Scénario       | Contenu                                                                   |
-| -------------- | ------------------------------------------------------------------------- |
-| `lobby`        | Trois joueurs arrivent, puis l'un d'eux part ; la partie ne démarre pas   |
-| `game-session` | Le lobby se remplit à quatre, la partie démarre, les joueurs se déplacent |
+| Scénario       | Contenu                                                                                 |
+| -------------- | --------------------------------------------------------------------------------------- |
+| `lobby`        | Alice arrive, Bob et Chloé la rejoignent, puis Bob part ; la partie ne démarre pas      |
+| `game-session` | Le joueur local rejoint le salon, qui se remplit ; la partie démarre, les autres jouent |
 
-Un scénario est une liste d'étapes `{ delayMs, message }`, où `delayMs` est
-l'attente après l'étape précédente. `joinLobbySteps` (`src/mocks/lobbySteps.ts`)
-produit les messages d'arrivée dans un lobby, tels que le serveur les envoie.
+Ils sont construits avec `arrivalSteps` et `joinLobbySteps` (`src/mocks/lobbySteps.ts`, arrivées
+dans le salon) et `gameStateMessage` (`src/mocks/mockArena.ts`, état du jeu sur un plateau fixe
+de 15 × 13 cases, au format du serveur).
 
 Points à connaître :
 
 - Les scénarios sont écrits en TypeScript, pas en JSON : le protocole partagé les
   type, donc `npm run typecheck` signale ceux à corriger quand le Backend change un
   message.
-- Ils ne peuvent contenir que des messages définis dans `shared/` : bombes,
-  explosions, murs détruits et fin de partie arriveront avec le protocole. Le champ
-  `position`, encore une simple chaîne, reçoit comme sur le serveur la direction du
-  déplacement.
-- Le mock ne réagit pas à `send` : il rejoue son scénario quoi que le client
-  envoie. En test, `sentMessages` donne la liste de ce qui a été envoyé.
+- Ils suivent les règles du serveur : `tests/integration/mock-session.test.ts` rejoue chaque
+  scénario et vérifie le salon, les cases de départ, les déplacements (une case, sur du sol),
+  les bombes (posées sous le joueur, explosion 2,5 s plus tard, portée de 2 cases), les briques
+  détruites et les joueurs éliminés. Un scénario modifié qui ne les respecte plus échoue à ce
+  test. `game-session` doit en plus contenir chaque message du protocole.
+- Le mock ne réagit qu'à `JOIN_LOBBY` : il ne répond ni aux déplacements ni aux bombes du
+  joueur local (il faudrait refaire les règles du serveur dans le client), et il ignore
+  `START_GAME` : la partie démarre quand le salon est plein, comme sur le serveur. En test,
+  `sentMessages` donne la liste de ce qui a été envoyé.
+- Le plateau du mock est fixe, pour que les scénarios restent valables ; celui du serveur est
+  tiré au hasard.
 - Les messages sont livrés de façon asynchrone, en copie neuve : un abonné peut la
-  modifier sans altérer le scénario. Après `disconnect()`, une nouvelle connexion
-  rejoue le scénario depuis le début.
+  modifier sans altérer le scénario. Après `disconnect()`, le rejeu s'arrête ; il reprend du
+  début à la connexion suivante, ou au `JOIN_LOBBY` suivant.
 - En test, les minuteurs simulés de Vitest (`vi.useFakeTimers()`) évitent d'attendre
   les délais : voir `tests/integration/mock-session.test.ts`.
 
@@ -305,22 +332,25 @@ await app.start();
 app.stop();
 ```
 
-| Élément                    | Rôle                                                                             |
-| -------------------------- | -------------------------------------------------------------------------------- |
-| `app.bus`                  | Le bus de l'application, à transmettre aux couches                               |
-| `app.start()`              | Pose le pont connexion ↔ bus, ouvre la connexion, publie `connection:opened`     |
-| `app.stop()`               | Défait le pont, ferme la connexion, publie `connection:closed`                   |
-| `createConnection(mode)`   | Le point de choix entre serveur simulé et serveur réel                           |
-| `network/connectionBridge` | Le pont : message reçu → `server:<TYPE>` ; `input:join` / `input:move` → message |
+| Élément                    | Rôle                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `app.bus`                  | Le bus de l'application, à transmettre aux couches                           |
+| `app.start()`              | Pose le pont connexion ↔ bus, ouvre la connexion, publie `connection:opened` |
+| `app.stop()`               | Défait le pont, ferme la connexion, publie `connection:closed`               |
+| `createConnection(mode)`   | Le point de choix entre serveur simulé et serveur réel                       |
+| `network/connectionBridge` | Le pont : message reçu → `server:<TYPE>` ; `input:*` → message               |
 
 La connexion se règle avec la variable `VITE_CONNECTION_MODE`, lue dans `src/config.ts` au
-moment du build ou du lancement de `npm run dev` (dans un fichier `client/.env.local`, par
-exemple) :
+lancement de Vite (`npm run dev`, `npm run build`) :
 
-| Valeur   | Connexion                                                                                  |
-| -------- | ------------------------------------------------------------------------------------------ |
-| `mock`   | Par défaut : `MockServerAdapter`, qui rejoue le scénario `game-session` (hors ligne)       |
-| `server` | Serveur réel à l'adresse `SERVER_URL`. Pas encore disponible : `new App()` lève une erreur |
+| Valeur   | Connexion                                                                     | Utilisée par                          |
+| -------- | ----------------------------------------------------------------------------- | ------------------------------------- |
+| `server` | Par défaut : `WebSocketClient`, vers le serveur réel à l'adresse `SERVER_URL` | `npm run dev`, `npm run build`, Tauri |
+| `mock`   | `MockServerAdapter`, qui rejoue le scénario `game-session` (hors ligne)       | `npm run dev:mock` (`.env.mock`)      |
+
+Pour changer de mode sans modifier le dépôt : une variable du shell, ou un fichier
+`client/.env.local` (ignoré par Git). Un fichier propre à un mode (`.env.mock`) passe avant
+`.env.local` : `npm run dev:mock` reste donc en mock.
 
 Points à connaître :
 
@@ -332,12 +362,11 @@ Points à connaître :
 - **Provisoire, à trancher avec le Backend** : `MOVE` exige un `playerId`, mais aucun message
   du serveur ne dit au client lequel est le sien. En attendant, le pont retient celui du
   premier `PLAYER_JOINED` reçu après l'envoi de `JOIN_LOBBY`, et n'envoie aucun `MOVE` avant.
-  Avec le mock, qui ne réagit pas à ce qu'on lui envoie, c'est le prochain joueur du scénario.
-- `input:bomb` n'est pas envoyé au serveur : `shared/` n'a pas de message pour poser une bombe.
+  `input:move` et `input:bomb` partent avec cet identifiant (`MOVE`, `PLACE_BOMB`). Avec le
+  mock, c'est celui du joueur local (`p1`), que `game-session` accueille aussitôt.
 - `IGameConnection` ne signale pas une coupure venue du serveur : `connection:closed` n'est
-  publié que par `stop()`. À compléter avec la connexion WebSocket réelle.
-- Le mode par défaut est `mock`, y compris dans l'exécutable produit par `npm run tauri build` :
-  il faudra construire avec `VITE_CONNECTION_MODE=server` quand la connexion réelle existera.
+  publié que par `stop()`. À compléter, dans le contrat et dans `WebSocketClient`.
+- Le mode par défaut est `server`, y compris dans l'exécutable produit par `npm run tauri build`.
 - Pour tester une couche, lui donner un `EventBus<AppEvents>` neuf ; pour tester l'assemblage,
   passer sa propre connexion : `new App(new MockServerAdapter(lobbyScenario))`. Voir
   `tests/integration/app-wiring.test.ts`.
