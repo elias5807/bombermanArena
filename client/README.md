@@ -120,9 +120,6 @@ Points à connaître :
   moteur de repli Canvas 2D (`preference: ['webgl', 'canvas']`), non activé pour l'instant.
 - Si la politique de sécurité (`csp`) de Tauri est activée plus tard, PixiJS exigera
   `'unsafe-eval'` ou l'import de `pixi.js/unsafe-eval`, en plus de l'autorisation du WebSocket.
-- Vite n'utilise pas PostCSS (`css.postcss` dans `vite.config.ts`) : sinon il cherche sa
-  configuration jusqu'à la racine du dépôt, dont le `package.json` est vide, et le build échoue
-  dès qu'il y a du CSS.
 
 ## Architecture
 
