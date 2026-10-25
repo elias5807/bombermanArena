@@ -85,7 +85,8 @@ Points à connaître :
 ## Rendu (PixiJS)
 
 L'affichage est dessiné avec [PixiJS 8](https://pixijs.com/) (WebGL), dans `src/render/`.
-Au lancement (`npm run dev` ou `npm run tauri dev`), le client affiche une grille de jeu vide.
+Au lancement, le client affiche l'écran de connexion puis la salle d'attente, en HTML
+(`index.html`) ; le plateau PixiJS n'apparaît qu'au début de la partie (`server:GAME_STARTED`).
 
 | Fichier                  | Rôle                                                                                                        |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------- |
@@ -96,8 +97,8 @@ Au lancement (`npm run dev` ou `npm run tauri dev`), le client affiche une grill
 | `GridLayout.ts`          | Géométrie de la grille, cases et pixels. Sans PixiJS, donc testable sans navigateur                         |
 
 ```ts
-const renderer = await PixiRenderer.create(document.querySelector('#app'));
-renderer.setScene(new GameScene({ columns: 15, rows: 13 }, await loadSprites()));
+const renderer = await PixiRenderer.create(document.getElementById('canvas-container')!);
+renderer.setScene(new GameScene({ columns: 15, rows: 13 }, await loadSprites(), app.bus));
 ```
 
 Points à connaître :
@@ -107,8 +108,8 @@ Points à connaître :
   (`cellOrigin`) et la case sous un point (`cellAt`) : les sprites s'en serviront pour se placer.
 - Repère : une case est repérée par sa colonne et sa ligne à partir de 0, en haut à gauche ;
   les colonnes vont vers la droite, les lignes vers le bas. Les dimensions de la grille
-  (13 × 11, dans `main.ts`) et ce repère sont **provisoires** : le serveur ne les envoie pas
-  encore, ils sont à valider avec le Backend.
+  viennent du serveur (`grid` dans `GAME_STATE`) ; à défaut, `main.ts` prend 15 × 13
+  (`DEMO_GRID`). Ce repère est **provisoire**, à valider avec le Backend.
 - Le moteur ne connaît ni le réseau ni l'état du jeu (règle ESLint de `render/`) : les scènes
   dessinent ce qu'on leur donne. La lecture de l'état viendra avec `GameState`.
 - `GridLayout` et `GameScene` se testent sans navigateur : les objets PixiJS fonctionnent sans
@@ -237,8 +238,11 @@ est alors effacé à la compilation et ne dépend pas de `shared/` à l'exécuti
 Si un import de **valeur** devient nécessaire (constantes de grille, par
 exemple), il faudra déclarer le même alias dans `vite.config.ts`.
 
-Le client ne dépend d'aucun workspace npm : il garde son propre
-`package.json` et son propre `package-lock.json`.
+Le client est un workspace npm du dépôt, comme `server` et `shared` : ses dépendances
+propres sont déclarées dans `client/package.json`, les outils communs (TypeScript, ESLint,
+Vitest, Prettier) dans le `package.json` racine, et tout s'installe à la racine, avec un seul
+`package-lock.json` (voir « Démarrer »). Il ne déclare pas le paquet `@bomberman-area/shared` :
+l'alias `@shared` lit directement `../shared/src`.
 
 ## Mode mock (hors ligne)
 
