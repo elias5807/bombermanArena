@@ -1,4 +1,4 @@
-import type { GameStateMessage, MoveMessage, ServerMessage } from '@shared/protocol/messages';
+import type { MoveMessage, ServerMessage } from '@shared/protocol/messages';
 import type { EventBus } from './EventBus';
 
 /** Direction d'un déplacement, telle que le protocole partagé la définit. */
@@ -30,22 +30,6 @@ export type ServerEvents = {
 };
 
 /**
- * Événements réseau haut niveau / sémantiques publiés sur le bus interne du client
- * pour découpler les modules de rendu (PixiJS) du protocole de transport brut.
- */
-export interface NetworkEvents {
-  /** Un joueur s'est déplacé selon l'état autoritaire du serveur. */
-  'network:playerMoved': {
-    playerId: string;
-    col: number;
-    row: number;
-    direction?: Direction;
-  };
-  /** Synchronisation globale de l'état du jeu (initial ou après reconnexion). */
-  'network:gameState': GameStateMessage;
-}
-
-/**
  * Ce que le joueur demande. Publié par les couches qui lisent ses actions
  * (`input/`, `ui/`) ; le pont connexion ↔ bus en fait des messages pour le serveur.
  */
@@ -63,10 +47,10 @@ export interface InputEvents {
 /**
  * Catalogue des événements du bus de l'application : nom de l'événement → type
  * de sa donnée. Le préfixe dit d'où vient l'information : `connection:` la
- * liaison avec le serveur, `server:` ce que le serveur annonce, `network:` les
- * événements de jeu synchronisés, `input:` ce que le joueur demande.
+ * liaison avec le serveur, `server:` ce que le serveur annonce, `input:` ce que
+ * le joueur demande.
  */
-export type AppEvents = ConnectionEvents & ServerEvents & NetworkEvents & InputEvents;
+export type AppEvents = ConnectionEvents & ServerEvents & InputEvents;
 
 /** Le bus de l'application, tel que les couches le reçoivent de `App`. */
 export type AppEventBus = EventBus<AppEvents>;

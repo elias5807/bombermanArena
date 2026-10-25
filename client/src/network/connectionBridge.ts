@@ -42,20 +42,7 @@ export function bridgeConnection(connection: IGameConnection, bus: AppEventBus):
         awaitingOwnJoin = false;
       }
 
-      // 1. Publication générique sous le canal server:<TYPE>
       bus.emit(`server:${message.type}`, message);
-
-      // 2. Publication des événements sémantiques vers l'EventBus local
-      if (message.type === 'POSITION_UPDATED') {
-        bus.emit('network:playerMoved', {
-          playerId: message.playerId,
-          col: message.col,
-          row: message.row,
-          direction: message.direction,
-        });
-      } else if (message.type === 'GAME_STATE') {
-        bus.emit('network:gameState', message);
-      }
     }),
 
     bus.on('input:join', ({ playerName }) => {

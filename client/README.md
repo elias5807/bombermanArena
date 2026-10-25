@@ -206,7 +206,7 @@ annonce, `input:` ce que le joueur demande.
 | `server:PLAYER_JOINED`    | `PlayerJoinedMessage`    | pont connexion ↔ bus, à la réception du message   | `state/`, pont (détection playerId)   |
 | `server:LOBBY_STATUS`     | `LobbyStatusMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (affichage salon), `state/` |
 | `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (lancement de partie)       |
-| `server:GAME_STATE`       | `GameStateMessage`       | pont connexion ↔ bus, à la réception du message   | `GameScene` (carte et joueurs)        |
+| `server:GAME_STATE`       | `GameStateMessage`       | pont connexion ↔ bus, à la réception du message   | `GameScene`, `main.ts` (HUD, cache)   |
 | `server:POSITION_UPDATED` | `PositionUpdatedMessage` | pont connexion ↔ bus, à la réception du message   | `GameScene` (déplacement du sprite)   |
 | `server:BOMB_PLACED`      | `BombPlacedMessage`      | pont connexion ↔ bus, à la réception du message   | `GameScene` (affichage bombe posée)   |
 | `server:BOMB_EXPLODED`    | `BombExplodedMessage`    | pont connexion ↔ bus, à la réception du message   | `GameScene` (souffle, briques, morts) |
@@ -223,6 +223,10 @@ Points à connaître :
 - Une couche reçoit le bus sous le type `AppEventBus` et ne publie que les événements de sa
   ligne dans le tableau. Pour un nouvel événement, l'ajouter au catalogue : le compilateur
   refuse un nom ou une donnée qui n'y figure pas.
+- `GameScene` n'écoute que les quatre événements de la partie (`GAME_STATE`, `POSITION_UPDATED`,
+  `BOMB_PLACED`, `BOMB_EXPLODED`) et dessine ce qu'ils disent, sans rien décider. Elle est créée
+  après `GAME_STARTED`, donc souvent après le premier `GAME_STATE` : `main.ts` garde le dernier
+  état reçu et le lui donne une fois, à sa création.
 - Ce catalogue est une première version, à faire évoluer avec les couches `state/`, `input/`
   et `ui/` quand elles arriveront.
 
