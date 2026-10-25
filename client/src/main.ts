@@ -1,5 +1,6 @@
 import type { GameStateMessage } from '@shared/protocol/messages';
 import { App } from './App';
+import { describeGameOver } from './ui/gameOverMessage';
 import { PixiRenderer } from './render/PixiRenderer';
 import { GameScene } from './render/scenes/GameScene';
 import { loadSprites } from './render/sprites/loadSprites';
@@ -161,3 +162,16 @@ window.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// Fin de partie, déduite de l'état du serveur : un encart par-dessus le plateau
+const gameOverPanel = canvasContainer.appendChild(document.createElement('div'));
+gameOverPanel.className = 'game-over hidden';
+const gameOverTitle = gameOverPanel.appendChild(document.createElement('h2'));
+const gameOverText = gameOverPanel.appendChild(document.createElement('p'));
+app.bus.on('state:gameOver', (result) => {
+  const { title, message } = describeGameOver(result, app.state.players);
+  gameOverTitle.textContent = title;
+  gameOverText.textContent = message;
+  gameOverPanel.classList.remove('hidden');
+});
+app.bus.on('server:GAME_STARTED', () => gameOverPanel.classList.add('hidden'));
