@@ -201,9 +201,10 @@ annonce, `input:` ce que le joueur demande, `session:` ce que le client sait de 
 
 | Événement                 | Donnée                   | Publié par                                        | Écouté par                                                   |
 | ------------------------- | ------------------------ | ------------------------------------------------- | ------------------------------------------------------------ |
-| `connection:opened`       | —                        | `App`, une fois la connexion ouverte              | `main.ts`, `ui/`                                             |
-| `connection:closed`       | —                        | `App.stop()`, si la connexion était ouverte       | `ui/`                                                        |
-| `connection:error`        | `{ error }`              | `App` (ouverture impossible), pont (envoi échoué) | `ui/`                                                        |
+| `connection:opened`       | —                        | `App`, une fois la connexion ouverte              | `ui/` (`ConnectionStatus` : « Rejoindre » actif)             |
+| `connection:closed`       | —                        | `App.stop()`, si la connexion était ouverte       | `state/` (remise à zéro), `ui/` (`ConnectionStatus`)         |
+| `connection:lost`         | —                        | `App`, coupure venue du serveur                   | `main.ts` (écran de connexion), `state/`, `ui/`              |
+| `connection:error`        | `{ error }`              | `App` (ouverture impossible), pont (envoi échoué) | `ui/` (`ConnectionStatus` : serveur injoignable)             |
 | `server:PLAYER_JOINED`    | `PlayerJoinedMessage`    | pont connexion ↔ bus, à la réception du message   | pont (détection playerId)                                    |
 | `server:LOBBY_STATUS`     | `LobbyStatusMessage`     | pont connexion ↔ bus, à la réception du message   | `ui/` (`LobbyView` : salon, bouton « Lancer »)               |
 | `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (lancement), `state/`, `ui/` (HUD, chrono, encart) |
@@ -267,6 +268,7 @@ elle est réelle ou simulée ; le choix se fait en un seul point, au démarrage
 | `connect()`          | Ouvre la connexion (promesse) ; sans effet si elle est déjà ouverte              |
 | `send(message)`      | Envoie un message au serveur ; lève une erreur si la connexion n'est pas ouverte |
 | `onMessage(handler)` | S'abonne aux messages du serveur ; retourne la fonction qui annule l'abonnement  |
+| `onClose(handler)`   | S'abonne aux coupures venues du serveur, jamais à celles de `disconnect()`       |
 | `disconnect()`       | Ferme la connexion ; les abonnements sont conservés                              |
 
 `MockServerAdapter` est l'implémentation simulée. Il rejoue un **scénario** : une liste
@@ -377,8 +379,10 @@ Points à connaître :
   premier `PLAYER_JOINED` reçu après l'envoi de `JOIN_LOBBY`, et n'envoie aucun `MOVE` avant.
   `input:move` et `input:bomb` partent avec cet identifiant (`MOVE`, `PLACE_BOMB`). Avec le
   mock, c'est celui du joueur local (`p1`), que `game-session` accueille aussitôt.
-- `IGameConnection` ne signale pas une coupure venue du serveur : `connection:closed` n'est
-  publié que par `stop()`. À compléter, dans le contrat et dans `WebSocketClient`.
+- Une coupure venue du serveur (`onClose`, appelé une fois par connexion ouverte, jamais après
+  `disconnect()`) publie `connection:lost` ; `connection:closed` reste réservé à `stop()`.
+  L'application revient à l'arrêt, et `start()` ouvre une connexion neuve. Le mock ne se coupe
+  jamais de lui-même.
 - Le mode par défaut est `server`, y compris dans l'exécutable produit par `npm run tauri build`.
 - Pour tester une couche, lui donner un `EventBus<AppEvents>` neuf ; pour tester l'assemblage,
   passer sa propre connexion : `new App(new MockServerAdapter(lobbyScenario))`. Voir
