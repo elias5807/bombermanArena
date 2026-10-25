@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { LobbyStatusMessage } from '@shared/protocol/messages';
-import { renderLobbyPlayers } from '../../src/ui/lobbyList';
+import type { AppEvents } from '../../src/core/AppEvents';
+import { EventBus } from '../../src/core/EventBus';
+import { LobbyView, renderLobbyPlayers } from '../../src/ui/lobbyList';
 
 type LobbyPlayers = LobbyStatusMessage['players'];
 
@@ -138,5 +140,114 @@ describe('renderLobbyPlayers', () => {
       'P3: En attente...',
       'P4: En attente...',
     ]);
+  });
+
+  it('marque l’emplacement du joueur local', () => {
+    renderLobbyPlayers(list, [ALICE, BOB], 'p2');
+
+    expect(describeSlots(list).map((slot) => slot.name)).toEqual([
+      'P1: Alice',
+      'P2: Bob (vous)',
+      'P3: En attente...',
+      'P4: En attente...',
+    ]);
+  });
+
+  it('ne marque personne tant que le joueur local est inconnu ou absent', () => {
+    renderLobbyPlayers(list, [ALICE, BOB]);
+    expect(describeSlots(list).map((slot) => slot.name)).toEqual([
+      'P1: Alice',
+      'P2: Bob',
+      'P3: En attente...',
+      'P4: En attente...',
+    ]);
+
+    renderLobbyPlayers(list, [ALICE], 'p9');
+    expect(describeSlots(list)[0]?.name).toBe('P1: Alice');
+  });
+});
+
+describe('LobbyView', () => {
+  let bus: EventBus<AppEvents>;
+  let state: { localPlayerId: string | null };
+  let list: HTMLUListElement;
+  let startButton: HTMLButtonElement;
+  let startHint: HTMLElement;
+  let view: LobbyView;
+
+  const lobbyStatus = (...players: LobbyPlayers) =>
+    bus.emit('server:LOBBY_STATUS', { type: 'LOBBY_STATUS', players });
+
+  beforeEach(() => {
+    bus = new EventBus<AppEvents>((error) => {
+      throw error;
+    });
+    state = { localPlayerId: null };
+    list = document.createElement('ul');
+    startButton = document.createElement('button');
+    startHint = document.createElement('p');
+    document.body.replaceChildren(list, startButton, startHint);
+    view = new LobbyView({ list, startButton, startHint }, bus, state);
+  });
+
+  it('affiche 4 emplacements en attente avant le premier LOBBY_STATUS', () => {
+    expect(describeSlots(list).map((slot) => slot.status)).toEqual([
+      'ATTENTE',
+      'ATTENTE',
+      'ATTENTE',
+      'ATTENTE',
+    ]);
+  });
+
+  it('désactive « Lancer la partie » avec un texte d’aide tant qu’il y a moins de 2 joueurs', () => {
+    expect(startButton.disabled).toBe(true);
+    expect(startHint.hidden).toBe(false);
+    expect(startHint.textContent).toBe('Il faut au moins 2 joueurs pour lancer la partie.');
+
+    lobbyStatus(ALICE);
+
+    expect(startButton.disabled).toBe(true);
+    expect(startHint.hidden).toBe(false);
+  });
+
+  it('active « Lancer la partie » dès que le salon compte 2 joueurs, et le désactive au départ de l’un', () => {
+    lobbyStatus(ALICE, BOB);
+    expect(startButton.disabled).toBe(false);
+    expect(startHint.hidden).toBe(true);
+
+    lobbyStatus(ALICE, BOB, CAROL);
+    expect(startButton.disabled).toBe(false);
+
+    lobbyStatus(BOB);
+    expect(startButton.disabled).toBe(true);
+    expect(startHint.hidden).toBe(false);
+  });
+
+  it('affiche les joueurs du LOBBY_STATUS et marque le joueur local', () => {
+    state.localPlayerId = 'p2';
+    lobbyStatus(ALICE, BOB);
+
+    expect(describeSlots(list).map((slot) => slot.name)).toEqual([
+      'P1: Alice',
+      'P2: Bob (vous)',
+      'P3: En attente...',
+      'P4: En attente...',
+    ]);
+  });
+
+  it('marque le joueur local quand son identifiant arrive après la liste', () => {
+    lobbyStatus(ALICE, BOB);
+    state.localPlayerId = 'p1';
+    bus.emit('session:joined', { playerId: 'p1' });
+
+    expect(describeSlots(list)[0]?.name).toBe('P1: Alice (vous)');
+  });
+
+  it('ne suit plus le bus après dispose()', () => {
+    view.dispose();
+    lobbyStatus(ALICE, BOB);
+
+    expect(startButton.disabled).toBe(true);
+    expect(describeSlots(list)[0]?.status).toBe('ATTENTE');
   });
 });
