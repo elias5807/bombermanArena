@@ -29,7 +29,12 @@
               autocomplete="off"
             />
           </div>
-          <button id="btn-login" class="btn primary">Rejoindre la salle d'attente</button>
+          <!-- Tenu à jour par ui/connectionStatus.ts -->
+          <div id="connection-status" class="connection-status" role="alert" hidden>
+            <p id="connection-message"></p>
+            <button id="btn-retry" class="btn secondary">Réessayer</button>
+          </div>
+          <button id="btn-login" class="btn primary" disabled>Rejoindre la salle d'attente</button>
           <button id="btn-show-help-login" class="btn secondary">Instructions de jeu</button>
         </div>
 

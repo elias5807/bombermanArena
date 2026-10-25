@@ -482,6 +482,28 @@ html {
   text-align: center;
 }
 
+/* État de la connexion, sur l'écran de connexion */
+.connection-status {
+  width: 100%;
+  max-width: 400px;
+  margin-bottom: 15px;
+  padding: 10px 15px;
+  border-radius: 5px;
+  border: 2px solid darkred;
+  background: #222;
+  color: var(--text-light);
+  text-align: center;
+}
+.connection-status[hidden] {
+  display: none;
+}
+.connection-status p {
+  margin: 0 0 10px;
+}
+.connection-status .btn {
+  margin-bottom: 0;
+}
+
 /* Sprites Banner on Login */
 .login-sprites-banner {
   display: flex;
