@@ -1,5 +1,6 @@
 import type { GameStateMessage } from '@shared/protocol/messages';
 import { App } from './App';
+import { describeGameOver } from './ui/gameOverMessage';
 import { PixiRenderer } from './render/PixiRenderer';
 import { GameScene } from './render/scenes/GameScene';
 import { loadSprites } from './render/sprites/loadSprites';
@@ -92,27 +93,22 @@ function launchGame() {
           currentScene = new GameScene(grid, await loadSprites(), app.bus);
           r.setScene(currentScene);
 
+          // La scène écoute le bus à partir de maintenant : l'état arrivé avant elle lui est
+          // donné une fois, les suivants lui parviennent directement.
           if (cachedGameState) {
             currentScene.handleGameState(cachedGameState);
-            updateHUD(cachedGameState.players);
           }
         })
         .catch((error: unknown) => {
           console.error("Impossible d'initialiser le rendu :", error);
         });
-    } else if (currentScene && cachedGameState) {
-      currentScene.handleGameState(cachedGameState);
-      updateHUD(cachedGameState.players);
     }
   }
 }
 
-// Mise en cache de l'état du jeu pour initialiser GameScene dès son ouverture
+// Mise en cache de l'état du jeu pour la GameScene créée après son arrivée
 app.bus.on('server:GAME_STATE', (msg) => {
   cachedGameState = msg;
-  if (currentScene) {
-    currentScene.handleGameState(msg);
-  }
   updateHUD(msg.players);
 });
 
@@ -166,3 +162,16 @@ window.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// Fin de partie, déduite de l'état du serveur : un encart par-dessus le plateau
+const gameOverPanel = canvasContainer.appendChild(document.createElement('div'));
+gameOverPanel.className = 'game-over hidden';
+const gameOverTitle = gameOverPanel.appendChild(document.createElement('h2'));
+const gameOverText = gameOverPanel.appendChild(document.createElement('p'));
+app.bus.on('state:gameOver', (result) => {
+  const { title, message } = describeGameOver(result, app.state.players);
+  gameOverTitle.textContent = title;
+  gameOverText.textContent = message;
+  gameOverPanel.classList.remove('hidden');
+});
+app.bus.on('server:GAME_STARTED', () => gameOverPanel.classList.add('hidden'));

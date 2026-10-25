@@ -14,7 +14,7 @@ const BACKGROUND_COLOR = 0x1a1a1f;
  *
  * @example
  * const renderer = await PixiRenderer.create(document.querySelector('#app'));
- * renderer.setScene(new GameScene({ columns: 15, rows: 13 }, await loadSprites()));
+ * renderer.setScene(new GameScene({ columns: 15, rows: 13 }, await loadSprites(), app.bus));
  * // ... à la fermeture :
  * renderer.destroy();
  */
