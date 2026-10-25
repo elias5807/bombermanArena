@@ -1,19 +1,23 @@
 import type { GameStateMessage } from '@shared/protocol/messages';
 import { App } from './App';
-import { describeGameOver } from './ui/gameOverMessage';
+import { GameOverPanel } from './ui/gameOverMessage';
 import { KeyboardInput } from './input/KeyboardInput';
 import { PixiRenderer } from './render/PixiRenderer';
 import { GameScene } from './render/scenes/GameScene';
 import { loadSprites } from './render/sprites/loadSprites';
-import { renderLobbyPlayers } from './ui/lobbyList';
+import { GameTimer } from './ui/gameTimer';
+import { Hud } from './ui/hud';
+import { LobbyView } from './ui/lobbyList';
 import './style.css';
 
 /**
  * Point d'entrée de l'application.
  *
- * Enchaîne les écrans décrits dans `index.html` (connexion, salle d'attente, partie, aide).
- * Au lancement de la partie, démarre le rendu PixiJS, charge les sprites, puis affiche
- * `GameScene`. Le clavier pilote la partie tant que le joueur local est en vie.
+ * Enchaîne les écrans décrits dans `index.html` (connexion, salle d'attente, partie, aide)
+ * et y branche les modules de `ui/`, qui se tiennent à jour d'après le bus : salon, HUD,
+ * chrono et encart de fin de partie. Au lancement de la partie, démarre le rendu PixiJS,
+ * charge les sprites, puis affiche `GameScene`. Le clavier pilote la partie tant que le
+ * joueur local est en vie.
  */
 
 const DEMO_GRID = { columns: 15, rows: 13 };
@@ -25,8 +29,10 @@ const gameScreen = document.getElementById('game-screen') as HTMLElement;
 const helpPanel = document.getElementById('help-panel') as HTMLElement;
 const canvasContainer = document.getElementById('canvas-container') as HTMLDivElement;
 const pseudoInput = document.getElementById('pseudo-input') as HTMLInputElement;
-const lobbyMyName = document.getElementById('lobby-my-name') as HTMLSpanElement;
 const lobbyPlayersList = document.querySelector('.lobby-players') as HTMLUListElement;
+const startHint = document.getElementById('start-hint') as HTMLElement;
+const timerDisplay = document.querySelector('.timer') as HTMLElement;
+const hudPlayerList = document.querySelector('.player-list') as HTMLElement;
 
 // Buttons
 const btnLogin = document.getElementById('btn-login') as HTMLButtonElement;
@@ -56,20 +62,11 @@ btnCloseHelp.addEventListener('click', hideHelp);
 const app = new App();
 void app.start();
 
-// Synchronisation de l'affichage du lobby avec le serveur
-app.bus.on('server:LOBBY_STATUS', ({ players }) => {
-  if (!lobbyPlayersList) return;
-  renderLobbyPlayers(lobbyPlayersList, players);
-});
-
-function updateHUD(players: { name?: string; playerId: string }[]) {
-  players.forEach((p, idx) => {
-    const item = document.querySelector(`.player-item.p${idx + 1} .player-name`);
-    if (item && p.name) {
-      item.textContent = `${p.name} (P${idx + 1})`;
-    }
-  });
-}
+// Écrans tenus à jour d'après le bus
+new LobbyView({ list: lobbyPlayersList, startButton: btnStartGame, startHint }, app.bus, app.state);
+new Hud(hudPlayerList, app.bus, app.state);
+new GameTimer(timerDisplay, app.bus);
+new GameOverPanel(canvasContainer, app.bus, app.state);
 
 function launchGame() {
   if (gameScreen.classList.contains('hidden')) {
@@ -100,7 +97,6 @@ function launchGame() {
 // Mise en cache de l'état du jeu pour la GameScene créée après son arrivée
 app.bus.on('server:GAME_STATE', (msg) => {
   cachedGameState = msg;
-  updateHUD(msg.players);
 });
 
 // Lancement automatique synchronisé quand le serveur annonce le début de partie
@@ -111,9 +107,6 @@ app.bus.on('server:GAME_STARTED', () => {
 // Actions Login -> Lobby
 btnLogin.addEventListener('click', () => {
   const pseudo = pseudoInput.value.trim() || 'VoleurInconnu';
-  if (lobbyMyName) {
-    lobbyMyName.textContent = `P1: ${pseudo}`;
-  }
 
   // Notification au serveur via le bus d'événements
   app.bus.emit('input:join', { playerName: pseudo });
@@ -149,16 +142,3 @@ new KeyboardInput(
   app.bus,
   () => !gameScreen.classList.contains('hidden') && app.state.isLocalPlayerAlive,
 );
-
-// Fin de partie, déduite de l'état du serveur : un encart par-dessus le plateau
-const gameOverPanel = canvasContainer.appendChild(document.createElement('div'));
-gameOverPanel.className = 'game-over hidden';
-const gameOverTitle = gameOverPanel.appendChild(document.createElement('h2'));
-const gameOverText = gameOverPanel.appendChild(document.createElement('p'));
-app.bus.on('state:gameOver', (result) => {
-  const { title, message } = describeGameOver(result, app.state.players);
-  gameOverTitle.textContent = title;
-  gameOverText.textContent = message;
-  gameOverPanel.classList.remove('hidden');
-});
-app.bus.on('server:GAME_STARTED', () => gameOverPanel.classList.add('hidden'));
