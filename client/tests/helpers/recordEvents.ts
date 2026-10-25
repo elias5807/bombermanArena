@@ -20,6 +20,7 @@ const EVENT_NAMES = [
   'input:bomb',
   'input:start',
   'session:joined',
+  'state:gameOver',
 ] as const satisfies readonly (keyof AppEvents)[];
 
 /**

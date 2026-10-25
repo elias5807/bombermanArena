@@ -58,13 +58,31 @@ export interface SessionEvents {
   'session:joined': { playerId: string };
 }
 
+/** Issue d'une partie, vue par le joueur local. */
+export type GameOutcome = 'victory' | 'defeat' | 'draw';
+
+/**
+ * Ce que le client déduit de l'état du jeu. Publié par `GameState` (`state/`).
+ */
+export interface StateEvents {
+  /**
+   * La partie est finie : il reste au plus un joueur en vie. Publié une fois par partie.
+   * `winnerId` est le survivant, `null` s'il n'y en a aucun (`outcome` vaut alors `draw`).
+   *
+   * PROVISOIRE : le serveur n'annonce pas la fin de partie ; le client la déduit des
+   * éliminations et des départs, en attendant un message `GAME_OVER`.
+   */
+  'state:gameOver': { winnerId: string | null; outcome: GameOutcome };
+}
+
 /**
  * Catalogue des événements du bus de l'application : nom de l'événement → type
  * de sa donnée. Le préfixe dit d'où vient l'information : `connection:` la
  * liaison avec le serveur, `server:` ce que le serveur annonce, `input:` ce que
- * le joueur demande, `session:` ce que le client sait de lui-même.
+ * le joueur demande, `session:` ce que le client sait de lui-même, `state:` ce
+ * qu'il déduit de l'état du jeu.
  */
-export type AppEvents = ConnectionEvents & ServerEvents & InputEvents & SessionEvents;
+export type AppEvents = ConnectionEvents & ServerEvents & InputEvents & SessionEvents & StateEvents;
 
 /** Le bus de l'application, tel que les couches le reçoivent de `App`. */
 export type AppEventBus = EventBus<AppEvents>;
