@@ -235,6 +235,45 @@ describe('WebSocketClient', () => {
       expect(FakeWebSocket.instances).toHaveLength(2);
       expect(received).toEqual([joinedAlice]);
     });
+
+    it("n'ouvre qu'une socket pour deux connect() simultanés", async () => {
+      const { client } = createClient();
+
+      const first = client.connect();
+      const second = client.connect();
+      expect(FakeWebSocket.instances).toHaveLength(1);
+
+      lastSocket().simulateOpen();
+      await expect(Promise.all([first, second])).resolves.toEqual([undefined, undefined]);
+    });
+
+    it('rejette tous les connect() en attente si l’ouverture échoue, puis accepte un nouvel essai', async () => {
+      const { client } = createClient();
+      const first = client.connect();
+      const second = client.connect();
+      expect(FakeWebSocket.instances).toHaveLength(1);
+
+      lastSocket().simulateError();
+      await expect(first).rejects.toThrow(URL);
+      await expect(second).rejects.toThrow(URL);
+
+      await open(client);
+      expect(FakeWebSocket.instances).toHaveLength(2);
+    });
+
+    it("garde la nouvelle connexion quand l'ancienne socket finit de se fermer", async () => {
+      const { client, socket: oldSocket, received } = await createConnectedClient();
+      client.disconnect();
+      const socket = await open(client);
+
+      oldSocket.simulateClose(1000); // le vrai WebSocket signale la fermeture plus tard
+      client.send(join);
+      socket.simulateMessage(joinedAlice);
+      await flushDeliveries();
+
+      expect(socket.sent).toEqual([JSON.stringify(join)]);
+      expect(received).toEqual([joinedAlice]);
+    });
   });
 
   describe('déconnexion', () => {
@@ -257,6 +296,39 @@ describe('WebSocketClient', () => {
       client.disconnect();
 
       expect(close).toHaveBeenCalledTimes(1);
+    });
+
+    it('ne livre jamais un message arrivé juste avant disconnect()', async () => {
+      const { client, socket, received } = await createConnectedClient();
+
+      socket.simulateMessage(joinedAlice);
+      client.disconnect();
+      await flushDeliveries();
+
+      expect(received).toEqual([]);
+    });
+
+    it('ne livre pas les messages déjà arrivés quand un abonné se déconnecte', async () => {
+      const { client, socket, received } = await createConnectedClient();
+      client.onMessage(() => client.disconnect());
+
+      socket.simulateMessage(joinedAlice);
+      socket.simulateMessage(joinedBob);
+      await flushDeliveries();
+
+      expect(received).toEqual([joinedAlice]);
+    });
+
+    it("ne livre pas à l'ancienne connexion un message arrivé avant une reconnexion", async () => {
+      const { client, socket: oldSocket, received } = await createConnectedClient();
+
+      oldSocket.simulateMessage(joinedAlice);
+      client.disconnect();
+      const socket = await open(client);
+      socket.simulateMessage(joinedBob);
+      await flushDeliveries();
+
+      expect(received).toEqual([joinedBob]);
     });
   });
 
@@ -397,6 +469,20 @@ describe('WebSocketClient', () => {
       await flushDeliveries();
 
       expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("n'appelle pas un abonné retiré par un autre pendant la livraison du même message", async () => {
+      const { client, socket } = await createConnectedClient();
+      const lateHandler = vi.fn();
+      let unsubscribeLate = () => {};
+      client.onMessage(() => unsubscribeLate());
+      unsubscribeLate = client.onMessage(lateHandler);
+
+      socket.simulateMessage(joinedAlice);
+      socket.simulateMessage(joinedBob);
+      await flushDeliveries();
+
+      expect(lateHandler).not.toHaveBeenCalled();
     });
 
     it("n'appelle qu'une fois par message une fonction abonnée deux fois", async () => {
