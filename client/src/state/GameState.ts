@@ -21,6 +21,10 @@ export interface PlayerInfo {
  * ou aucun, après un `GAME_STARTED`. Les éliminations (`BOMB_EXPLODED`) comptent, tout
  * comme les départs : un joueur absent d'un `GAME_STATE` a quitté la partie.
  *
+ * Tout est oublié quand la connexion se ferme (`connection:closed`) ou se coupe
+ * (`connection:lost`) : le serveur retire alors le joueur, qui aura un nouvel identifiant
+ * à la connexion suivante.
+ *
  * PROVISOIRE : le serveur n'annonce pas la fin de partie. Quand il enverra un message
  * `GAME_OVER`, c'est lui qui déclenchera `state:gameOver` ; les abonnés n'auront rien à changer.
  *
@@ -44,6 +48,8 @@ export class GameState {
     bus.on('server:GAME_STARTED', (message) => this.start(message));
     bus.on('server:GAME_STATE', (message) => this.synchronize(message));
     bus.on('server:BOMB_EXPLODED', (message) => this.eliminate(message));
+    bus.on('connection:closed', () => this.reset());
+    bus.on('connection:lost', () => this.reset());
   }
 
   /** Identifiant du joueur local, `null` tant qu'il n'a pas rejoint la salle d'attente. */
@@ -68,6 +74,16 @@ export class GameState {
     }
     this.startingPlayerCount = players.length;
     this.phase = 'playing';
+  }
+
+  /**
+   * Oublie la session. Sans cela, quitter en pleine partie laisserait la phase à `playing` :
+   * le premier `GAME_STATE` du salon suivant, où le joueur est seul, passerait pour une victoire.
+   */
+  private reset(): void {
+    this.ownPlayerId = null;
+    this.roster.clear();
+    this.phase = 'idle';
   }
 
   private synchronize({ players }: GameStateMessage): void {

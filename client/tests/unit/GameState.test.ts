@@ -233,6 +233,36 @@ describe('GameState', () => {
     });
   });
 
+  describe('fin de la connexion', () => {
+    it.each(['connection:closed', 'connection:lost'] as const)(
+      '%s oublie la session : joueur local et joueurs de la partie',
+      (event) => {
+        const { bus, state, joinAs, start } = setup();
+        joinAs('p1');
+        start('p1', 'p2');
+
+        bus.emit(event);
+
+        expect(state.localPlayerId).toBeNull();
+        expect(state.players).toEqual([]);
+        expect(state.isLocalPlayerAlive).toBe(false);
+      },
+    );
+
+    it('pas de fausse fin de partie dans le salon suivant, après avoir quitté en pleine partie', () => {
+      const { bus, gameOvers, joinAs, start, gameState } = setup();
+      joinAs('p1');
+      start('p1', 'p2');
+      bus.emit('connection:closed');
+
+      // Nouvelle connexion, nouvel identifiant : seul dans le salon, comme l'annonce le serveur.
+      joinAs('p3');
+      gameState([{ playerId: 'p3' }]);
+
+      expect(gameOvers).toEqual([]);
+    });
+  });
+
   describe('joueur local', () => {
     it('id local inconnu : le survivant gagne, jamais « victoire »', () => {
       const { state, gameOvers, start, explode } = setup();

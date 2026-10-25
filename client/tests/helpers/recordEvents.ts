@@ -7,6 +7,7 @@ export type RecordedEvent = [name: keyof AppEvents, payload: unknown];
 const EVENT_NAMES = [
   'connection:opened',
   'connection:closed',
+  'connection:lost',
   'connection:error',
   'server:PLAYER_JOINED',
   'server:LOBBY_STATUS',
