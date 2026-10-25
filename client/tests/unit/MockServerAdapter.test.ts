@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, ServerMessage } from '@shared/protocol/messages';
+import type { IGameConnection } from '../../src/network/IGameConnection';
 import {
   MockServerAdapter,
   type JoinScenario,
@@ -203,6 +204,22 @@ describe('MockServerAdapter', () => {
       vi.advanceTimersByTime(1000);
 
       expect(received).toEqual([joinedAlice]);
+    });
+
+    it('ne signale jamais de coupure : ni pendant le rejeu, ni à la déconnexion', async () => {
+      const { adapter } = createAdapter();
+      const connection: IGameConnection = adapter;
+      const onClose = vi.fn();
+      const unsubscribe = connection.onClose(onClose);
+
+      await adapter.connect();
+      vi.advanceTimersByTime(1000);
+      adapter.disconnect();
+      await adapter.connect();
+      vi.advanceTimersByTime(1000);
+      unsubscribe();
+
+      expect(onClose).not.toHaveBeenCalled();
     });
   });
 

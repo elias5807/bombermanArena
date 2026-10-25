@@ -95,6 +95,14 @@ export class MockServerAdapter implements IGameConnection {
     };
   }
 
+  /**
+   * Le serveur simulé ne se coupe jamais de lui-même : l'abonné n'est jamais appelé.
+   * Seul `disconnect()` ferme la connexion, et le contrat ne la signale pas.
+   */
+  onClose(): () => void {
+    return () => undefined;
+  }
+
   disconnect(): void {
     this.connected = false;
     this.stopReplay();
