@@ -92,27 +92,22 @@ function launchGame() {
           currentScene = new GameScene(grid, await loadSprites(), app.bus);
           r.setScene(currentScene);
 
+          // La scène écoute le bus à partir de maintenant : l'état arrivé avant elle lui est
+          // donné une fois, les suivants lui parviennent directement.
           if (cachedGameState) {
             currentScene.handleGameState(cachedGameState);
-            updateHUD(cachedGameState.players);
           }
         })
         .catch((error: unknown) => {
           console.error("Impossible d'initialiser le rendu :", error);
         });
-    } else if (currentScene && cachedGameState) {
-      currentScene.handleGameState(cachedGameState);
-      updateHUD(cachedGameState.players);
     }
   }
 }
 
-// Mise en cache de l'état du jeu pour initialiser GameScene dès son ouverture
+// Mise en cache de l'état du jeu pour la GameScene créée après son arrivée
 app.bus.on('server:GAME_STATE', (msg) => {
   cachedGameState = msg;
-  if (currentScene) {
-    currentScene.handleGameState(msg);
-  }
   updateHUD(msg.players);
 });
 
