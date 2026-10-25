@@ -16,7 +16,6 @@ import {
 } from '../../src/render/scenes/GameScene';
 import type { SpriteTextures } from '../../src/render/sprites/loadSprites';
 import { blankTextures } from '../helpers/blankTextures';
-import { recordEvents } from '../helpers/recordEvents';
 
 /**
  * Ces tests utilisent les vrais objets PixiJS (conteneurs, sprites, tracés) : ils n'ont pas
@@ -428,46 +427,6 @@ describe('GameScene', () => {
 
       expect(vi.getTimerCount()).toBe(0);
       expect(() => vi.runAllTimers()).not.toThrow();
-    });
-  });
-
-  describe('clavier', () => {
-    it('publie input:move pour les flèches et input:bomb pour la barre d’espace, rien pour le reste', () => {
-      const events = recordEvents(bus);
-
-      for (const key of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'a', 'Enter']) {
-        scene.handleInput(key);
-      }
-
-      expect(events).toEqual([
-        ['input:move', { direction: 'up' }],
-        ['input:move', { direction: 'down' }],
-        ['input:move', { direction: 'left' }],
-        ['input:move', { direction: 'right' }],
-        ['input:bomb', undefined],
-      ]);
-    });
-
-    it('ne bloque aucune touche quand le premier joueur de la liste est éliminé', () => {
-      scene.resize({ width: 800, height: 600 });
-      bus.emit('server:GAME_STATE', gameState([ALICE, BOB]));
-      bus.emit('server:BOMB_EXPLODED', {
-        type: 'BOMB_EXPLODED',
-        bombId: 'b1',
-        col: 1,
-        row: 1,
-        affectedCells: [{ col: 1, row: 1 }],
-        eliminatedPlayers: ['p1'],
-      });
-      const events = recordEvents(bus);
-
-      scene.handleInput('ArrowLeft');
-      scene.handleInput(' ');
-
-      expect(events).toEqual([
-        ['input:move', { direction: 'left' }],
-        ['input:bomb', undefined],
-      ]);
     });
   });
 

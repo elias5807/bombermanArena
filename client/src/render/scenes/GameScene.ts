@@ -5,7 +5,7 @@ import type {
   GameStateMessage,
   PositionUpdatedMessage,
 } from '@shared/protocol/messages';
-import type { AppEventBus, Direction } from '../../core/AppEvents';
+import type { AppEventBus } from '../../core/AppEvents';
 import { GridLayout, type GridSize, type Viewport } from '../GridLayout';
 import type { SpriteKey, SpriteTextures } from '../sprites/loadSprites';
 import type { Scene } from './Scene';
@@ -56,7 +56,6 @@ export class GameScene implements Scene {
 
   private readonly grid: GridSize;
   private readonly textures: SpriteTextures;
-  private readonly bus: AppEventBus;
   private readonly border = new Graphics();
 
   // Ordre d'affichage (z-index des couches PixiJS)
@@ -91,13 +90,11 @@ export class GameScene implements Scene {
   /**
    * @param grid Dimensions du plateau, en cases.
    * @param textures Textures des sprites, chargées par `loadSprites`.
-   * @param bus Bus d'événements de l'application : la scène y lit l'état du serveur et y
-   *   publie les demandes du joueur.
+   * @param bus Bus d'événements de l'application : la scène y lit l'état du serveur.
    */
   constructor(grid: GridSize, textures: SpriteTextures, bus: AppEventBus) {
     this.grid = grid;
     this.textures = textures;
-    this.bus = bus;
 
     this.view.addChild(this.floorLayer);
     this.view.addChild(this.wallsLayer);
@@ -149,29 +146,6 @@ export class GameScene implements Scene {
 
     for (const player of this.players) {
       this.updatePlayerSprite(player);
-    }
-  }
-
-  /**
-   * Traduit une touche du clavier en demande au serveur (`input:move`, `input:bomb`).
-   * La scène n'applique aucun déplacement : elle attend la réponse du serveur.
-   */
-  handleInput(key: string): void {
-    if (key === ' ') {
-      this.bus.emit('input:bomb');
-      return;
-    }
-
-    const keyToDirection: Record<string, Direction> = {
-      ArrowUp: 'up',
-      ArrowDown: 'down',
-      ArrowLeft: 'left',
-      ArrowRight: 'right',
-    };
-
-    const direction = keyToDirection[key];
-    if (direction) {
-      this.bus.emit('input:move', { direction });
     }
   }
 
