@@ -1,9 +1,14 @@
 import type { ClientMessage, ServerMessage } from '@shared/protocol/messages';
-import type { IGameConnection, MessageHandler } from '../../src/network/IGameConnection';
+import type {
+  CloseHandler,
+  IGameConnection,
+  MessageHandler,
+} from '../../src/network/IGameConnection';
 
 /**
  * Fausse connexion pilotée par le test : il décide de ce que le serveur envoie
- * (`receive`), de l'issue de `connect()` et de l'état de la connexion (`open`).
+ * (`receive`), de l'issue de `connect()`, de l'état de la connexion (`open`) et
+ * de ses coupures (`drop`).
  */
 export class FakeConnection implements IGameConnection {
   /** Messages passés à `send`, dans l'ordre. */
@@ -16,6 +21,7 @@ export class FakeConnection implements IGameConnection {
   connectOutcome: () => Promise<void> = () => Promise.resolve();
 
   private readonly handlers = new Set<MessageHandler>();
+  private readonly closeHandlers = new Set<CloseHandler>();
 
   /** Nombre d'abonnés aux messages du serveur. */
   get handlerCount(): number {
@@ -42,9 +48,29 @@ export class FakeConnection implements IGameConnection {
     };
   }
 
+  onClose(handler: CloseHandler): () => void {
+    this.closeHandlers.add(handler);
+    return () => {
+      this.closeHandlers.delete(handler);
+    };
+  }
+
+  /** Nombre d'abonnés aux coupures. */
+  get closeHandlerCount(): number {
+    return this.closeHandlers.size;
+  }
+
   disconnect(): void {
     this.disconnectCalls += 1;
     this.open = false;
+  }
+
+  /** Simule une coupure venue du serveur : la connexion se ferme et ses abonnés sont prévenus. */
+  drop(): void {
+    this.open = false;
+    for (const handler of [...this.closeHandlers]) {
+      handler();
+    }
   }
 
   /** Simule l'arrivée d'un message du serveur. */

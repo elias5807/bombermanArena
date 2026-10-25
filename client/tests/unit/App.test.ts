@@ -215,4 +215,84 @@ describe('App', () => {
       ]);
     });
   });
+
+  describe('coupure venue du serveur', () => {
+    it('publie connection:lost, et non connection:closed', async () => {
+      const { connection, app, events } = setup();
+      await app.start();
+
+      connection.drop();
+
+      expect(events).toEqual([
+        ['connection:opened', undefined],
+        ['connection:lost', undefined],
+      ]);
+    });
+
+    it("revient à l'arrêt : plus rien ne passe, et stop() est sans effet", async () => {
+      const { connection, app, events } = setup();
+      await app.start();
+      connection.drop();
+      events.length = 0;
+
+      connection.receive(LOBBY_STATUS);
+      app.stop();
+
+      expect(connection.handlerCount).toBe(0);
+      expect(connection.closeHandlerCount).toBe(0);
+      expect(connection.disconnectCalls).toBe(0);
+      expect(events).toEqual([]);
+    });
+
+    it('permet un nouveau start(), qui rouvre une connexion neuve', async () => {
+      const { connection, app, events } = setup();
+      await app.start();
+      connection.drop();
+      events.length = 0;
+
+      await app.start();
+      connection.receive(LOBBY_STATUS);
+
+      expect(connection.connectCalls).toBe(2);
+      expect(events).toEqual([
+        ['connection:opened', undefined],
+        ['server:LOBBY_STATUS', LOBBY_STATUS],
+      ]);
+    });
+
+    it("n'écoute plus les coupures après stop()", async () => {
+      const { connection, app, events } = setup();
+      await app.start();
+      app.stop();
+      events.length = 0;
+
+      connection.drop();
+
+      expect(connection.closeHandlerCount).toBe(0);
+      expect(events).toEqual([]);
+    });
+  });
+
+  describe('state', () => {
+    it('suit la partie à travers la connexion : joueur local, puis fin de partie', async () => {
+      const { connection, app, events } = setup();
+      await app.start();
+
+      app.bus.emit('input:join', { playerName: 'Alice' });
+      connection.receive({ type: 'PLAYER_JOINED', playerId: 'p1', playerName: 'Alice' });
+      connection.receive({ type: 'GAME_STARTED', players: ['p1', 'p2'] });
+      connection.receive({
+        type: 'BOMB_EXPLODED',
+        bombId: 'b1',
+        col: 1,
+        row: 1,
+        affectedCells: [{ col: 1, row: 1 }],
+        eliminatedPlayers: ['p2'],
+      });
+
+      expect(app.state.localPlayerId).toBe('p1');
+      expect(app.state.isLocalPlayerAlive).toBe(true);
+      expect(events).toContainEqual(['state:gameOver', { winnerId: 'p1', outcome: 'victory' }]);
+    });
+  });
 });

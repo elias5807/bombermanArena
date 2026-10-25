@@ -1,4 +1,4 @@
-import type { GameStateMessage, MoveMessage, ServerMessage } from '@shared/protocol/messages';
+import type { MoveMessage, ServerMessage } from '@shared/protocol/messages';
 import type { EventBus } from './EventBus';
 
 /** Direction d'un déplacement, telle que le protocole partagé la définit. */
@@ -11,8 +11,13 @@ export type Direction = MoveMessage['direction'];
 export interface ConnectionEvents {
   /** La connexion est ouverte : les messages peuvent partir et arriver. */
   'connection:opened': undefined;
-  /** Le client a fermé la connexion, qui était ouverte. */
+  /** Le client a fermé la connexion, qui était ouverte (`App.stop()`). */
   'connection:closed': undefined;
+  /**
+   * La connexion ouverte s'est coupée sans que le client le demande (serveur arrêté,
+   * réseau perdu). L'application est revenue à l'arrêt : `start()` en ouvre une neuve.
+   */
+  'connection:lost': undefined;
   /** La connexion n'a pas pu s'ouvrir, ou un message n'a pas pu être envoyé. */
   'connection:error': { error: unknown };
 }
@@ -30,22 +35,6 @@ export type ServerEvents = {
 };
 
 /**
- * Événements réseau haut niveau / sémantiques publiés sur le bus interne du client
- * pour découpler les modules de rendu (PixiJS) du protocole de transport brut.
- */
-export interface NetworkEvents {
-  /** Un joueur s'est déplacé selon l'état autoritaire du serveur. */
-  'network:playerMoved': {
-    playerId: string;
-    col: number;
-    row: number;
-    direction?: Direction;
-  };
-  /** Synchronisation globale de l'état du jeu (initial ou après reconnexion). */
-  'network:gameState': GameStateMessage;
-}
-
-/**
  * Ce que le joueur demande. Publié par les couches qui lisent ses actions
  * (`input/`, `ui/`) ; le pont connexion ↔ bus en fait des messages pour le serveur.
  */
@@ -61,12 +50,44 @@ export interface InputEvents {
 }
 
 /**
+ * Ce que le client sait de sa propre session. Publié par le pont connexion ↔ bus.
+ */
+export interface SessionEvents {
+  /**
+   * Le joueur local a rejoint la salle d'attente sous cet identifiant. Publié une
+   * fois après chaque `JOIN_LOBBY`, juste avant le `server:PLAYER_JOINED` qui l'annonce.
+   *
+   * PROVISOIRE : le serveur ne dit pas au client quel est son identifiant ; le pont le
+   * déduit (voir `bridgeConnection`). Les abonnés n'ont pas à savoir comment.
+   */
+  'session:joined': { playerId: string };
+}
+
+/** Issue d'une partie, vue par le joueur local. */
+export type GameOutcome = 'victory' | 'defeat' | 'draw';
+
+/**
+ * Ce que le client déduit de l'état du jeu. Publié par `GameState` (`state/`).
+ */
+export interface StateEvents {
+  /**
+   * La partie est finie : il reste au plus un joueur en vie. Publié une fois par partie.
+   * `winnerId` est le survivant, `null` s'il n'y en a aucun (`outcome` vaut alors `draw`).
+   *
+   * PROVISOIRE : le serveur n'annonce pas la fin de partie ; le client la déduit des
+   * éliminations et des départs, en attendant un message `GAME_OVER`.
+   */
+  'state:gameOver': { winnerId: string | null; outcome: GameOutcome };
+}
+
+/**
  * Catalogue des événements du bus de l'application : nom de l'événement → type
  * de sa donnée. Le préfixe dit d'où vient l'information : `connection:` la
- * liaison avec le serveur, `server:` ce que le serveur annonce, `network:` les
- * événements de jeu synchronisés, `input:` ce que le joueur demande.
+ * liaison avec le serveur, `server:` ce que le serveur annonce, `input:` ce que
+ * le joueur demande, `session:` ce que le client sait de lui-même, `state:` ce
+ * qu'il déduit de l'état du jeu.
  */
-export type AppEvents = ConnectionEvents & ServerEvents & NetworkEvents & InputEvents;
+export type AppEvents = ConnectionEvents & ServerEvents & InputEvents & SessionEvents & StateEvents;
 
 /** Le bus de l'application, tel que les couches le reçoivent de `App`. */
 export type AppEventBus = EventBus<AppEvents>;
