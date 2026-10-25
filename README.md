@@ -38,13 +38,25 @@ Le projet est structuré sous forme de monorepo npm avec trois workspaces distin
 │   │   ├── 📁 ui/                 # Interface utilisateur (Menus, Lobby, HUD)
 │   │   └── 📄 main.ts             # Point d'entrée du client
 │   └── 📁 tests/                  # Tests unitaires et d'intégration (176 tests)
+├── 📜 start.bat                   # Script de lancement tout-en-un (Windows)
 ├── 📝 CONTRIBUTING.md             # Règles de contribution et GitFlow
 └── 📝 README.md
 ```
 
 ---
 
-## 🚀 Démarrer le Serveur
+## ⚡ Démarrage Rapide (Windows)
+
+Pour lancer le jeu complet (Serveur + Client) en un seul clic sous Windows :
+- Double-cliquez sur **`start.bat`** à la racine, ou exécutez dans un terminal :
+  ```cmd
+  .\start.bat
+  ```
+Le script installe automatiquement les dépendances si nécessaire (`npm ci`), compile le TypeScript (`npm run build --workspaces`), démarre le serveur backend (port `3000`) et le client Vite (port `5173`) dans deux consoles distinctes, puis ouvre automatiquement le jeu dans votre navigateur.
+
+---
+
+## 🚀 Démarrer le Serveur Manuellement
 
 ### Prérequis
 - **Node.js** 20+
@@ -155,4 +167,21 @@ npm run lint --workspace=@bomberman-area/client
 
 ## 🤝 Contribution & GitFlow
 
-Merci de consulter le guide [CONTRIBUTING.md](CONTRIBUTING.md) pour les règles de nommage des branches (`feature/*`, `fix/*`, `test/*`, `ci/*`) et la structure des messages de commit conventionnels. Tout code doit passer par une Pull Request validée vers la branche `develop`.
+Le projet suit des règles de contribution et de qualité de code strictes. Merci de consulter le guide complet **[CONTRIBUTING.md](CONTRIBUTING.md)** avant toute intervention.
+
+### Points clés à respecter :
+- **Branches protégées** : Il est **interdit** de pousser directement sur `main` ou `develop`.
+- **Nommage des branches** : Créez vos branches depuis `develop` avec un préfixe de type (`feature/*`, `fix/*`, `docs/*`, `test/*`, `refactor/*`, `ci/*`, `chore/*`).
+- **Commits conventionnels** : Format obligatoire `<type>: <description>` (`feat:`, `fix:`, `chore:`, `refactor:`, `ci:`, `docs:`, `test:`).
+- **Processus de Pull Request** :
+  1. Toute PR doit cibler la branche **`develop`**.
+  2. Elle doit être **approuvée par au moins 2 personnes** (dont au moins un membre du pôle DevOps & Qualité).
+  3. L'ensemble des pipelines CI GitHub Actions doivent passer avec succès.
+- **Validation locale obligatoire avant soumission** :
+  ```bash
+  npm run typecheck
+  npm test --workspaces
+  npm run build --workspaces
+  npm run lint --workspace=@bomberman-area/client
+  ```
+- **Releases** : Lorsque `develop` est stabilisée, une PR vers `main` est effectuée avec la pose d'un **tag Git** (`vX.Y.Z`).
