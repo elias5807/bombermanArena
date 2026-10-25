@@ -135,7 +135,7 @@ l'intéresse, sans jamais appeler une autre couche directement.
 | `src/core/`    | `EventBus` — publish/subscribe, aucune logique métier ; catalogue `AppEvents` |
 | `src/network/` | Connexion WebSocket réelle ou simulée, derrière `IGameConnection`             |
 | `src/state/`   | État local du jeu, alimenté par les événements serveur                        |
-| `src/input/`   | Clavier/souris traduits en intentions de jeu                                  |
+| `src/input/`   | `KeyboardInput` : flèches et espace traduits en `input:move`, `input:bomb`    |
 | `src/render/`  | Rendu PixiJS : lit l'état, dessine, ne le modifie jamais                      |
 | `src/ui/`      | Menu, lobby, HUD                                                              |
 | `src/mocks/`   | Scénarios de parties rejoués hors ligne                                       |
@@ -196,24 +196,27 @@ Points à connaître :
 Les événements de l'application sont décrits dans `src/core/AppEvents.ts` (`AppEvents`), et le
 bus de l'application est un `EventBus<AppEvents>` (alias `AppEventBus`). Le préfixe dit d'où
 vient l'information : `connection:` la liaison avec le serveur, `server:` ce que le serveur
-annonce, `input:` ce que le joueur demande.
+annonce, `input:` ce que le joueur demande, `session:` ce que le client sait de lui-même,
+`state:` ce qu'il déduit de l'état du jeu.
 
 | Événement                 | Donnée                   | Publié par                                        | Écouté par                            |
 | ------------------------- | ------------------------ | ------------------------------------------------- | ------------------------------------- |
 | `connection:opened`       | —                        | `App`, une fois la connexion ouverte              | `main.ts`, `ui/`                      |
 | `connection:closed`       | —                        | `App.stop()`, si la connexion était ouverte       | `ui/`                                 |
 | `connection:error`        | `{ error }`              | `App` (ouverture impossible), pont (envoi échoué) | `ui/`                                 |
-| `server:PLAYER_JOINED`    | `PlayerJoinedMessage`    | pont connexion ↔ bus, à la réception du message   | `state/`, pont (détection playerId)   |
+| `server:PLAYER_JOINED`    | `PlayerJoinedMessage`    | pont connexion ↔ bus, à la réception du message   | pont (détection playerId)             |
 | `server:LOBBY_STATUS`     | `LobbyStatusMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (affichage salon), `state/` |
-| `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (lancement de partie)       |
-| `server:GAME_STATE`       | `GameStateMessage`       | pont connexion ↔ bus, à la réception du message   | `GameScene` (carte et joueurs)        |
+| `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (lancement), `state/`       |
+| `server:GAME_STATE`       | `GameStateMessage`       | pont connexion ↔ bus, à la réception du message   | `GameScene`, `main.ts`, `state/`      |
 | `server:POSITION_UPDATED` | `PositionUpdatedMessage` | pont connexion ↔ bus, à la réception du message   | `GameScene` (déplacement du sprite)   |
 | `server:BOMB_PLACED`      | `BombPlacedMessage`      | pont connexion ↔ bus, à la réception du message   | `GameScene` (affichage bombe posée)   |
-| `server:BOMB_EXPLODED`    | `BombExplodedMessage`    | pont connexion ↔ bus, à la réception du message   | `GameScene` (souffle, briques, morts) |
+| `server:BOMB_EXPLODED`    | `BombExplodedMessage`    | pont connexion ↔ bus, à la réception du message   | `GameScene`, `state/` (éliminations)  |
 | `input:join`              | `{ playerName }`         | `main.ts` (écran de connexion)                    | pont, qui envoie `JOIN_LOBBY`         |
-| `input:move`              | `{ direction }`          | `GameScene` (clavier)                             | pont, qui envoie `MOVE`               |
-| `input:bomb`              | —                        | `GameScene` (clavier)                             | pont, qui envoie `PLACE_BOMB`         |
+| `input:move`              | `{ direction }`          | `input/` (`KeyboardInput`, flèches)               | pont, qui envoie `MOVE`               |
+| `input:bomb`              | —                        | `input/` (`KeyboardInput`, barre d'espace)        | pont, qui envoie `PLACE_BOMB`         |
 | `input:start`             | —                        | `main.ts` (bouton lancer partie)                  | pont, qui envoie `START_GAME`         |
+| `session:joined`          | `{ playerId }`           | pont, au 1er `PLAYER_JOINED` après `JOIN_LOBBY`   | `state/` (`GameState`)                |
+| `state:gameOver`          | `{ winnerId, outcome }`  | `state/` (`GameState`), une fois par partie       | `main.ts` (encart de fin de partie)   |
 
 Points à connaître :
 
@@ -223,8 +226,17 @@ Points à connaître :
 - Une couche reçoit le bus sous le type `AppEventBus` et ne publie que les événements de sa
   ligne dans le tableau. Pour un nouvel événement, l'ajouter au catalogue : le compilateur
   refuse un nom ou une donnée qui n'y figure pas.
-- Ce catalogue est une première version, à faire évoluer avec les couches `state/`, `input/`
-  et `ui/` quand elles arriveront.
+- `GameScene` n'écoute que les quatre événements de la partie (`GAME_STATE`, `POSITION_UPDATED`,
+  `BOMB_PLACED`, `BOMB_EXPLODED`) et dessine ce qu'ils disent, sans rien décider. Elle est créée
+  après `GAME_STARTED`, donc souvent après le premier `GAME_STATE` : `main.ts` garde le dernier
+  état reçu et le lui donne une fois, à sa création.
+- `session:joined` et `state:gameOver` sont **provisoires** : le serveur ne dit ni au client quel
+  est son identifiant, ni quand la partie est finie. `state/GameState` publie `state:gameOver`
+  quand il reste au plus un joueur en vie après `GAME_STARTED` (éliminations et départs) ;
+  `outcome` vaut `victory`, `defeat` ou `draw`. Un futur message `GAME_OVER` pourra le remplacer
+  sans changer les abonnés.
+- Ce catalogue est une première version, à faire évoluer avec les couches `input/` et `ui/`
+  quand elles arriveront.
 
 ## Types partagés avec le serveur
 
@@ -335,6 +347,7 @@ app.stop();
 | Élément                    | Rôle                                                                         |
 | -------------------------- | ---------------------------------------------------------------------------- |
 | `app.bus`                  | Le bus de l'application, à transmettre aux couches                           |
+| `app.state`                | `GameState` : joueur local, joueurs de la partie, fin de partie              |
 | `app.start()`              | Pose le pont connexion ↔ bus, ouvre la connexion, publie `connection:opened` |
 | `app.stop()`               | Défait le pont, ferme la connexion, publie `connection:closed`               |
 | `createConnection(mode)`   | Le point de choix entre serveur simulé et serveur réel                       |
@@ -380,8 +393,9 @@ En place : l'outillage, l'`EventBus` et son catalogue d'événements, la connexi
 Pas encore relié : les écrans de `main.ts` et `GameScene` n'utilisent ni le bus ni la
 connexion. La partie affichée est simulée dans `GameScene`, de façon provisoire ; les
 événements du mock circulent sur le bus sans que personne ne les écoute. Les dossiers
-`state/`, `input/` et `ui/` sont vides.
+`state/` contient `GameState` (joueur local, joueurs, fin de partie) ; `input/` contient
+`KeyboardInput` (clavier de la partie).
 
-Arrivent dans des PR dédiées : l'état du jeu (`state/GameState`), le clavier (`input/`), les
+Arrivent dans des PR dédiées : les
 écrans branchés sur le bus (`ui/`), la connexion WebSocket réelle (`WebSocketClient`), puis
 `GameScene` réduite au dessin de l'état reçu.

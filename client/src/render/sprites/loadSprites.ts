@@ -30,7 +30,7 @@ export type SpriteTextures = Record<SpriteKey, Texture>;
  * @throws si une image est introuvable ou illisible : aucune texture n'est alors rendue.
  *
  * @example
- * const scene = new GameScene({ columns: 15, rows: 13 }, await loadSprites());
+ * const scene = new GameScene({ columns: 15, rows: 13 }, await loadSprites(), app.bus);
  */
 export async function loadSprites(): Promise<SpriteTextures> {
   const entries = await Promise.all(

@@ -1,8 +1,12 @@
+import type { Sprite } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/App';
 import { gameSessionScenario } from '../../src/mocks/fixtures/game-session.fixture';
 import { lobbyScenario } from '../../src/mocks/fixtures/lobby.fixture';
+import { MOCK_GRID, MOCK_MAP } from '../../src/mocks/mockArena';
 import { MockServerAdapter, type ScenarioStep } from '../../src/network/MockServerAdapter';
+import { GameScene } from '../../src/render/scenes/GameScene';
+import { blankTextures } from '../helpers/blankTextures';
 import { recordEvents, type RecordedEvent } from '../helpers/recordEvents';
 
 /** Les événements que `steps` doivent produire sur le bus, un par message et dans l'ordre. */
@@ -64,6 +68,8 @@ describe('application assemblée : serveur simulé → bus', () => {
 
       expect(events).toEqual([
         ['input:join', { playerName: 'Louka' }],
+        // Le joueur local est reconnu à l'annonce de sa propre arrivée, le premier message.
+        ['session:joined', { playerId: 'p1' }],
         ...serverEventsOf(gameSessionScenario.stepsFor('Louka')),
       ]);
     });
@@ -106,6 +112,35 @@ describe('application assemblée : serveur simulé → bus', () => {
       ]);
     });
 
+    it('la scène affiche la partie du serveur simulé, chaque GAME_STATE appliqué une fois', async () => {
+      const app = new App(new MockServerAdapter(gameSessionScenario));
+      const textures = blankTextures();
+      const applied = vi.spyOn(GameScene.prototype, 'handleGameState');
+      const scene = new GameScene(MOCK_GRID, textures, app.bus);
+      scene.resize({ width: 800, height: 600 });
+      let gameStates = 0;
+      app.bus.on('server:GAME_STATE', () => (gameStates += 1));
+      await app.start();
+
+      app.bus.emit('input:join', { playerName: 'Louka' });
+      await vi.runAllTimersAsync();
+
+      const [, walls, entities] = scene.view.children;
+      const [effects, players] = entities.children;
+      const bricksAtStart = MOCK_MAP.flat().filter((cell) => cell === 2).length;
+      expect(gameStates).toBe(2);
+      expect(applied).toHaveBeenCalledTimes(gameStates);
+      // David est éliminé par sa bombe ; les deux explosions ont cassé 4 briques et sont effacées.
+      expect(players.children).toHaveLength(3);
+      expect(
+        walls.children.filter((sprite) => (sprite as Sprite).texture === textures.brick),
+      ).toHaveLength(bricksAtStart - 4);
+      expect(effects.children).toHaveLength(0);
+
+      scene.destroy();
+      vi.restoreAllMocks();
+    });
+
     it('stop() en cours de scénario : la suite n’arrive jamais sur le bus', async () => {
       const app = new App(new MockServerAdapter(gameSessionScenario));
       await app.start();
@@ -119,6 +154,7 @@ describe('application assemblée : serveur simulé → bus', () => {
 
       expect(events).toEqual([
         ['input:join', { playerName: 'Louka' }],
+        ['session:joined', { playerId: 'p1' }],
         ...serverEventsOf(gameSessionScenario.stepsFor('Louka')).slice(0, 5),
         ['connection:closed', undefined],
       ]);
