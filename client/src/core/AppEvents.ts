@@ -45,12 +45,26 @@ export interface InputEvents {
 }
 
 /**
+ * Ce que le client sait de sa propre session. Publié par le pont connexion ↔ bus.
+ */
+export interface SessionEvents {
+  /**
+   * Le joueur local a rejoint la salle d'attente sous cet identifiant. Publié une
+   * fois après chaque `JOIN_LOBBY`, juste avant le `server:PLAYER_JOINED` qui l'annonce.
+   *
+   * PROVISOIRE : le serveur ne dit pas au client quel est son identifiant ; le pont le
+   * déduit (voir `bridgeConnection`). Les abonnés n'ont pas à savoir comment.
+   */
+  'session:joined': { playerId: string };
+}
+
+/**
  * Catalogue des événements du bus de l'application : nom de l'événement → type
  * de sa donnée. Le préfixe dit d'où vient l'information : `connection:` la
  * liaison avec le serveur, `server:` ce que le serveur annonce, `input:` ce que
- * le joueur demande.
+ * le joueur demande, `session:` ce que le client sait de lui-même.
  */
-export type AppEvents = ConnectionEvents & ServerEvents & InputEvents;
+export type AppEvents = ConnectionEvents & ServerEvents & InputEvents & SessionEvents;
 
 /** Le bus de l'application, tel que les couches le reçoivent de `App`. */
 export type AppEventBus = EventBus<AppEvents>;

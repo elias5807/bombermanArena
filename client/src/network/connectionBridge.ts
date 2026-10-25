@@ -5,7 +5,8 @@ import type { IGameConnection } from './IGameConnection';
 /**
  * Relie la connexion et le bus d'événements, dans les deux sens :
  *
- * - connexion → bus : chaque message du serveur est publié sous `server:<TYPE>` ;
+ * - connexion → bus : chaque message du serveur est publié sous `server:<TYPE>`, et
+ *   l'identifiant du joueur local sous `session:joined` dès qu'il est connu ;
  * - bus → connexion : les demandes du joueur (`input:*`) partent sous la forme
  *   des messages du protocole partagé.
  *
@@ -40,6 +41,7 @@ export function bridgeConnection(connection: IGameConnection, bus: AppEventBus):
       if (awaitingOwnJoin && message.type === 'PLAYER_JOINED') {
         ownPlayerId = message.playerId;
         awaitingOwnJoin = false;
+        bus.emit('session:joined', { playerId: ownPlayerId });
       }
 
       bus.emit(`server:${message.type}`, message);
