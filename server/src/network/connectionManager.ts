@@ -31,9 +31,10 @@ export function startConnectionManager(port: number, engine = new GameEngine()):
 
       switch (message.type) {
         case 'JOIN_LOBBY': {
-          // Un socket ne porte qu'un joueur : un second joueur ne serait jamais retiré à la fermeture.
+          // Le client ne ferme pas son socket en quittant le salon : il revient par un nouveau
+          // JOIN_LOBBY. Un socket ne porte qu'un joueur, le précédent est donc remplacé.
           if (playerId) {
-            break;
+            engine.removePlayer(playerId);
           }
           playerId = engine.addPlayer(socket, message.playerName) ?? undefined;
           console.log(

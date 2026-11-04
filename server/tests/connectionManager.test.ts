@@ -124,13 +124,39 @@ describe('startConnectionManager', () => {
   });
 
   describe('JOIN_LOBBY répété', () => {
-    it('ne crée pas de second joueur pour le même socket', async () => {
-      const { client } = await join('Alice');
+    it("remplace le joueur du socket : l'ancien disparaît, le nouveau pseudo est pris en compte", async () => {
+      const { client, playerId } = await join('Alice');
 
       client.send(JSON.stringify({ type: 'JOIN_LOBBY', playerName: 'Alice2' }));
       await flush(client);
 
-      expect(engine.buildLobbyStatus().players.map((p) => p.playerName)).toEqual(['Alice']);
+      expect(engine.buildLobbyStatus().players.map((p) => p.playerName)).toEqual(['Alice2']);
+      expect(engine.getPlayer(playerId)).toBeUndefined();
+    });
+
+    it("annonce le nouvel identifiant au client, qui en a besoin pour jouer", async () => {
+      const { client, playerId } = await join('Alice');
+      const received: { type: string; playerId?: string }[] = [];
+      client.on('message', (data) => received.push(JSON.parse(data.toString())));
+
+      client.send(JSON.stringify({ type: 'JOIN_LOBBY', playerName: 'Alice2' }));
+      await flush(client);
+
+      const joined = received.find((message) => message.type === 'PLAYER_JOINED');
+      expect(joined?.playerId).toBeDefined();
+      expect(joined?.playerId).not.toBe(playerId);
+    });
+
+    it('continue de déplacer le joueur du socket après le remplacement', async () => {
+      const { client } = await join('Alice');
+
+      client.send(JSON.stringify({ type: 'JOIN_LOBBY', playerName: 'Alice2' }));
+      await flush(client);
+      const newId = engine.buildLobbyStatus().players[0]?.playerId as string;
+      client.send(JSON.stringify({ type: 'MOVE', playerId: newId, direction: 'right' }));
+      await flush(client);
+
+      expect(engine.getPlayer(newId)?.col).toBe(2);
     });
 
     it('libère la place du joueur à la fermeture du socket', async () => {
