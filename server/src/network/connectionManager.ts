@@ -2,6 +2,16 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { ClientMessage } from '@bomberman-area/shared';
 import { GameEngine } from '../game/GameEngine.js';
 
+/** @returns le message décodé, ou `null` si ce n'est pas un objet JSON. */
+function parseClientMessage(raw: string): ClientMessage | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? (parsed as ClientMessage) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function startConnectionManager(port: number, engine = new GameEngine()): WebSocketServer {
   const wss = new WebSocketServer({ port });
 
@@ -13,17 +23,19 @@ export function startConnectionManager(port: number, engine = new GameEngine()):
     let playerId: string | undefined;
 
     socket.on('message', (data) => {
-      let message: ClientMessage;
-
-      try {
-        message = JSON.parse(data.toString());
-      } catch (error) {
+      const message = parseClientMessage(data.toString());
+      if (!message) {
         console.error('Message invalide reçu :', data.toString());
         return;
       }
 
       switch (message.type) {
         case 'JOIN_LOBBY': {
+          // Le client ne ferme pas son socket en quittant le salon : il revient par un nouveau
+          // JOIN_LOBBY. Un socket ne porte qu'un joueur, le précédent est donc remplacé.
+          if (playerId) {
+            engine.removePlayer(playerId);
+          }
           playerId = engine.addPlayer(socket, message.playerName) ?? undefined;
           console.log(
             `${message.playerName} a rejoint le lobby (id: ${playerId ?? 'refusé, lobby plein'})`,
@@ -32,17 +44,16 @@ export function startConnectionManager(port: number, engine = new GameEngine()):
         }
 
         case 'MOVE': {
-          const id = playerId ?? message.playerId;
-          if (id) {
-            engine.movePlayer(id, message.direction);
+          // L'identité vient du socket : le `playerId` du message, diffusé à tous, n'est pas fiable.
+          if (playerId) {
+            engine.movePlayer(playerId, message.direction);
           }
           break;
         }
 
         case 'PLACE_BOMB': {
-          const id = playerId ?? message.playerId;
-          if (id) {
-            engine.placeBomb(id);
+          if (playerId) {
+            engine.placeBomb(playerId);
           }
           break;
         }
