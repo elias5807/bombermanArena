@@ -216,6 +216,58 @@ describe('bridgeConnection', () => {
     });
   });
 
+  describe('session:joined (provisoire)', () => {
+    it("publie l'identifiant du joueur local, juste avant le PLAYER_JOINED qui l'annonce", () => {
+      const { connection, bus, events } = setup();
+
+      bus.emit('input:join', { playerName: 'Alice' });
+      connection.receive(playerJoined(ALICE));
+
+      expect(events.slice(1)).toEqual([
+        ['session:joined', { playerId: 'p1' }],
+        ['server:PLAYER_JOINED', playerJoined(ALICE)],
+      ]);
+    });
+
+    it("ne le publie qu'une fois : les arrivées suivantes sont celles des autres", () => {
+      const { connection, bus, events } = setup();
+      bus.emit('input:join', { playerName: 'Alice' });
+
+      connection.receive(playerJoined(ALICE));
+      connection.receive(playerJoined(BOB));
+
+      expect(events.filter(([name]) => name === 'session:joined')).toEqual([
+        ['session:joined', { playerId: 'p1' }],
+      ]);
+    });
+
+    it("ne publie rien sans JOIN_LOBBY, ni quand JOIN_LOBBY n'a pas pu partir", () => {
+      const { connection, bus, events } = setup();
+      connection.receive(playerJoined(ALICE));
+      connection.open = false;
+      bus.emit('input:join', { playerName: 'Bob' });
+      connection.open = true;
+
+      connection.receive(playerJoined(BOB));
+
+      expect(events.map(([name]) => name)).not.toContain('session:joined');
+    });
+
+    it('le publie à nouveau après chaque nouveau JOIN_LOBBY', () => {
+      const { connection, bus, events } = setup();
+      bus.emit('input:join', { playerName: 'Alice' });
+      connection.receive(playerJoined(ALICE));
+
+      bus.emit('input:join', { playerName: 'Bob' });
+      connection.receive(playerJoined(BOB));
+
+      expect(events.filter(([name]) => name === 'session:joined')).toEqual([
+        ['session:joined', { playerId: 'p1' }],
+        ['session:joined', { playerId: 'p2' }],
+      ]);
+    });
+  });
+
   describe('une fois le pont défait', () => {
     it('ne publie plus les messages du serveur', () => {
       const { connection, unbridge, events } = setup();

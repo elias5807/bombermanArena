@@ -215,4 +215,27 @@ describe('App', () => {
       ]);
     });
   });
+
+  describe('state', () => {
+    it('suit la partie à travers la connexion : joueur local, puis fin de partie', async () => {
+      const { connection, app, events } = setup();
+      await app.start();
+
+      app.bus.emit('input:join', { playerName: 'Alice' });
+      connection.receive({ type: 'PLAYER_JOINED', playerId: 'p1', playerName: 'Alice' });
+      connection.receive({ type: 'GAME_STARTED', players: ['p1', 'p2'] });
+      connection.receive({
+        type: 'BOMB_EXPLODED',
+        bombId: 'b1',
+        col: 1,
+        row: 1,
+        affectedCells: [{ col: 1, row: 1 }],
+        eliminatedPlayers: ['p2'],
+      });
+
+      expect(app.state.localPlayerId).toBe('p1');
+      expect(app.state.isLocalPlayerAlive).toBe(true);
+      expect(events).toContainEqual(['state:gameOver', { winnerId: 'p1', outcome: 'victory' }]);
+    });
+  });
 });

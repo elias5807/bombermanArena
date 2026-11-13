@@ -68,6 +68,8 @@ describe('application assemblée : serveur simulé → bus', () => {
 
       expect(events).toEqual([
         ['input:join', { playerName: 'Louka' }],
+        // Le joueur local est reconnu à l'annonce de sa propre arrivée, le premier message.
+        ['session:joined', { playerId: 'p1' }],
         ...serverEventsOf(gameSessionScenario.stepsFor('Louka')),
       ]);
     });
@@ -152,6 +154,7 @@ describe('application assemblée : serveur simulé → bus', () => {
 
       expect(events).toEqual([
         ['input:join', { playerName: 'Louka' }],
+        ['session:joined', { playerId: 'p1' }],
         ...serverEventsOf(gameSessionScenario.stepsFor('Louka')).slice(0, 5),
         ['connection:closed', undefined],
       ]);

@@ -6,6 +6,7 @@ import { bridgeConnection } from './network/connectionBridge';
 import type { IGameConnection } from './network/IGameConnection';
 import { MockServerAdapter } from './network/MockServerAdapter';
 import { WebSocketClient } from './network/WebSocketClient';
+import { GameState } from './state/GameState';
 
 /**
  * Choisit la connexion au serveur de jeu. C'est le seul endroit du client qui
@@ -21,8 +22,9 @@ export function createConnection(mode: ConnectionMode): IGameConnection {
 }
 
 /**
- * Assemblage de l'application : crée le bus d'événements, choisit la connexion
- * et les relie. Les couches reçoivent `bus` et ne se connaissent pas entre elles.
+ * Assemblage de l'application : crée le bus d'événements et l'état de la partie,
+ * choisit la connexion et les relie. Les couches reçoivent `bus` (et lisent
+ * `state`) ; elles ne se connaissent pas entre elles.
  *
  * @example
  * const app = new App();
@@ -32,6 +34,8 @@ export function createConnection(mode: ConnectionMode): IGameConnection {
 export class App {
   /** Le bus de l'application : la seule instance, à transmettre aux couches. */
   readonly bus: AppEventBus = new EventBus<AppEvents>();
+  /** Ce que le client sait de la partie, déduit du bus : la seule instance. */
+  readonly state = new GameState(this.bus);
 
   private readonly connection: IGameConnection;
   /** Défait le pont connexion ↔ bus. Défini tant que l'application est démarrée. */
