@@ -38,8 +38,11 @@ export class App {
   readonly state = new GameState(this.bus);
 
   private readonly connection: IGameConnection;
-  /** Défait le pont connexion ↔ bus. Défini tant que l'application est démarrée. */
-  private unbridge: (() => void) | undefined;
+  /**
+   * Défait le pont connexion ↔ bus et l'écoute des coupures. Défini tant que
+   * l'application est démarrée.
+   */
+  private detach: (() => void) | undefined;
   private connectionOpened = false;
 
   /**
@@ -56,15 +59,20 @@ export class App {
    *
    * La promesse n'est jamais rejetée : si la connexion ne s'ouvre pas,
    * `connection:error` est publié et l'application reste arrêtée, prête pour un
-   * nouveau `start()`.
+   * nouveau `start()`. De même si elle se coupe plus tard : `connection:lost`.
    */
   async start(): Promise<void> {
-    if (this.unbridge) {
+    if (this.detach) {
       return;
     }
     // Le pont est posé avant l'ouverture : un message reçu sans abonné serait perdu.
     const unbridge = bridgeConnection(this.connection, this.bus);
-    this.unbridge = unbridge;
+    const unwatch = this.connection.onClose(() => this.lose());
+    const detach = () => {
+      unbridge();
+      unwatch();
+    };
+    this.detach = detach;
 
     let failure: { error: unknown } | undefined;
     try {
@@ -74,7 +82,7 @@ export class App {
     }
 
     // `stop()` a pu être appelée pendant l'ouverture : ce démarrage ne compte plus.
-    if (this.unbridge !== unbridge) {
+    if (this.detach !== detach) {
       return;
     }
     if (failure) {
@@ -92,16 +100,31 @@ export class App {
    * l'application est déjà arrêtée. Elle peut être redémarrée avec `start()`.
    */
   stop(): void {
-    if (!this.unbridge) {
+    if (!this.detach) {
       return;
     }
-    this.unbridge();
-    this.unbridge = undefined;
+    const wasOpened = this.connectionOpened;
+    this.release();
     this.connection.disconnect();
 
-    if (this.connectionOpened) {
-      this.connectionOpened = false;
+    if (wasOpened) {
       this.bus.emit('connection:closed');
     }
+  }
+
+  /**
+   * La connexion s'est coupée d'elle-même. Le contrat ne le signale qu'après une ouverture
+   * réussie, et jamais après `disconnect()` : l'application était donc démarrée et ouverte.
+   */
+  private lose(): void {
+    this.release();
+    this.bus.emit('connection:lost');
+  }
+
+  /** Revient à l'état arrêté, sans toucher à la connexion. */
+  private release(): void {
+    this.detach?.();
+    this.detach = undefined;
+    this.connectionOpened = false;
   }
 }

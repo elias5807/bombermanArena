@@ -1,15 +1,35 @@
 import type { ClientMessage, ServerMessage } from '@shared/protocol/messages';
-import type { IGameConnection, MessageHandler } from './IGameConnection';
+import type { CloseHandler, IGameConnection, MessageHandler } from './IGameConnection';
+
+/**
+ * Appelle chaque abonné de `handlers` avec `call`. On parcourt une copie : un abonné peut
+ * s'abonner ou se désabonner pendant l'appel. Un abonné qui échoue n'empêche pas les autres.
+ */
+function callEach<Handler>(handlers: ReadonlySet<Handler>, call: (handler: Handler) => void): void {
+  for (const handler of [...handlers]) {
+    // Un abonné retiré en cours de route n'est plus appelé.
+    if (!handlers.has(handler)) {
+      continue;
+    }
+    try {
+      call(handler);
+    } catch (handlerError) {
+      console.error('[WebSocketClient] Erreur dans un handler :', handlerError);
+    }
+  }
+}
 
 /**
  * Connexion WebSocket réelle au serveur de jeu.
- * Implémente le contrat IGameConnection (connexion asynchrone, écoute et envoi de messages).
+ * Implémente le contrat IGameConnection (connexion asynchrone, écoute et envoi de messages,
+ * signal des coupures venues du serveur).
  */
 export class WebSocketClient implements IGameConnection {
   private socket: WebSocket | null = null;
   /** Ouverture en cours : un second `connect()` l'attend au lieu d'ouvrir une autre socket. */
   private opening: Promise<void> | null = null;
   private readonly handlers = new Set<MessageHandler>();
+  private readonly closeHandlers = new Set<CloseHandler>();
   private readonly url: string;
 
   constructor(url: string) {
@@ -128,6 +148,16 @@ export class WebSocketClient implements IGameConnection {
     this.handlers.add(handler);
     return () => {
       this.handlers.delete(handler);
+    };
+  }
+
+  /**
+   * Abonne un gestionnaire aux coupures venues du serveur (pas à `disconnect()`).
+   */
+  onClose(handler: CloseHandler): () => void {
+    this.closeHandlers.add(handler);
+    return () => {
+      this.closeHandlers.delete(handler);
     };
   }
 

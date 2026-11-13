@@ -11,8 +11,13 @@ export type Direction = MoveMessage['direction'];
 export interface ConnectionEvents {
   /** La connexion est ouverte : les messages peuvent partir et arriver. */
   'connection:opened': undefined;
-  /** Le client a fermé la connexion, qui était ouverte. */
+  /** Le client a fermé la connexion, qui était ouverte (`App.stop()`). */
   'connection:closed': undefined;
+  /**
+   * La connexion ouverte s'est coupée sans que le client le demande (serveur arrêté,
+   * réseau perdu). L'application est revenue à l'arrêt : `start()` en ouvre une neuve.
+   */
+  'connection:lost': undefined;
   /** La connexion n'a pas pu s'ouvrir, ou un message n'a pas pu être envoyé. */
   'connection:error': { error: unknown };
 }

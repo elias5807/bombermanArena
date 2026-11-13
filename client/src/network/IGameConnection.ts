@@ -3,6 +3,9 @@ import type { ClientMessage, ServerMessage } from '@shared/protocol/messages';
 /** Fonction appelée pour chaque message reçu du serveur. */
 export type MessageHandler = (message: ServerMessage) => void;
 
+/** Fonction appelée quand la connexion se coupe sans que le client l'ait demandé. */
+export type CloseHandler = () => void;
+
 /**
  * Connexion au serveur de jeu, telle que le reste du client la voit.
  *
@@ -50,6 +53,22 @@ export interface IGameConnection {
    * @returns la fonction qui annule cet abonnement.
    */
   onMessage(handler: MessageHandler): () => void;
+
+  /**
+   * Abonne `handler` aux coupures qui ne viennent pas du client : serveur arrêté,
+   * réseau perdu...
+   *
+   * - Appelé seulement pour une connexion ouverte (`connect()` résolu) : un échec
+   *   d'ouverture est signalé par le rejet de `connect()`.
+   * - Jamais après `disconnect()`, même si la fermeture s'achève plus tard.
+   * - Une fois au plus par connexion. La connexion est alors fermée : `send()` lève
+   *   une erreur, et `connect()` en ouvre une nouvelle.
+   * - Toujours de façon asynchrone, après les messages reçus avant la coupure.
+   * - Les abonnements suivent les mêmes règles que ceux de `onMessage`.
+   *
+   * @returns la fonction qui annule cet abonnement.
+   */
+  onClose(handler: CloseHandler): () => void;
 
   /**
    * Ferme la connexion. Sans effet si elle est déjà fermée. Les messages qui
