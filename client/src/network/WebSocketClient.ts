@@ -99,19 +99,10 @@ export class WebSocketClient implements IGameConnection {
 
         ws.addEventListener('close', () => {
           // Une socket fermée par `disconnect()` signale sa fermeture plus tard, parfois
-          // après l'ouverture de la suivante : elle ne doit ni effacer cette dernière, ni
-          // passer pour une coupure. Une socket jamais ouverte n'est pas `this.socket` non plus.
-          if (this.socket !== ws) {
-            return;
+          // après l'ouverture de la suivante : elle ne doit pas effacer cette dernière.
+          if (this.socket === ws) {
+            this.socket = null;
           }
-          // En microtâche, comme les messages : ceux reçus avant la coupure sont livrés d'abord.
-          queueMicrotask(() => {
-            // `disconnect()` a pu être appelée entre-temps : la coupure n'est plus signalée.
-            if (this.socket === ws) {
-              this.socket = null;
-              callEach(this.closeHandlers, (handler) => handler());
-            }
-          });
         });
       } catch (err) {
         reject(err);
@@ -126,7 +117,18 @@ export class WebSocketClient implements IGameConnection {
       return;
     }
 
-    callEach(this.handlers, (handler) => handler(message));
+    // On parcourt une copie : un abonné peut s'abonner ou se désabonner pendant la livraison.
+    for (const handler of [...this.handlers]) {
+      // Un abonné retiré en cours de route ne reçoit plus rien, pas même ce message.
+      if (!this.handlers.has(handler)) {
+        continue;
+      }
+      try {
+        handler(message);
+      } catch (handlerError) {
+        console.error('[WebSocketClient] Erreur dans un handler :', handlerError);
+      }
+    }
   }
 
   /**

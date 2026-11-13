@@ -10,6 +10,7 @@ import { ConnectionStatus } from './ui/connectionStatus';
 import { GameTimer } from './ui/gameTimer';
 import { Hud } from './ui/hud';
 import { LobbyView } from './ui/lobbyList';
+import { renderLobbyPlayers } from './ui/lobbyList';
 import './style.css';
 
 /**
@@ -97,33 +98,24 @@ let screens = mountScreens();
 // Les écrans écoutent le bus avant l'ouverture : ils ne manquent aucun événement.
 void app.start();
 
-/** Revient à l'écran de connexion, avec le salon, le HUD, le chrono et l'encart remis à zéro. */
-function showLoginScreen() {
-  for (const screen of screens) {
-    screen.dispose();
-  }
-  screens = mountScreens();
-  cachedGameState = null;
+// Écrans tenus à jour d'après le bus
+new LobbyView({ list: lobbyPlayersList, startButton: btnStartGame, startHint }, app.bus, app.state);
+new Hud(hudPlayerList, app.bus, app.state);
+new GameTimer(timerDisplay, app.bus);
+new GameOverPanel(canvasContainer, app.bus, app.state);
+// Synchronisation de l'affichage du lobby avec le serveur
+app.bus.on('server:LOBBY_STATUS', ({ players }) => {
+  if (!lobbyPlayersList) return;
+  renderLobbyPlayers(lobbyPlayersList, players);
+});
 
-  lobbyScreen.classList.add('hidden');
-  gameScreen.classList.add('hidden');
-  loginScreen.classList.remove('hidden');
-}
-
-/** Quitte le salon ou la partie : le serveur retire le joueur quand sa connexion se ferme. */
-function leaveSession() {
-  app.stop();
-  showLoginScreen();
-  void app.start();
-}
-
-app.bus.on('connection:lost', showLoginScreen);
-
-function startRendering() {
-  return PixiRenderer.create(canvasContainer).then(async (renderer) => ({
-    renderer,
-    sprites: await loadSprites(),
-  }));
+function updateHUD(players: { name?: string; playerId: string }[]) {
+  players.forEach((p, idx) => {
+    const item = document.querySelector(`.player-item.p${idx + 1} .player-name`);
+    if (item && p.name) {
+      item.textContent = `${p.name} (P${idx + 1})`;
+    }
+  });
 }
 
 function launchGame() {
