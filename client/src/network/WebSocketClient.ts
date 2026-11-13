@@ -7,6 +7,8 @@ import type { IGameConnection, MessageHandler } from './IGameConnection';
  */
 export class WebSocketClient implements IGameConnection {
   private socket: WebSocket | null = null;
+  /** Ouverture en cours : un second `connect()` l'attend au lieu d'ouvrir une autre socket. */
+  private opening: Promise<void> | null = null;
   private readonly handlers = new Set<MessageHandler>();
   private readonly url: string;
 
@@ -18,11 +20,20 @@ export class WebSocketClient implements IGameConnection {
    * Ouvre la connexion WebSocket vers le serveur.
    * La promesse se résout quand la connexion est établie et prête à échanger.
    */
-  async connect(): Promise<void> {
+  connect(): Promise<void> {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      return;
+      return Promise.resolve();
     }
 
+    if (!this.opening) {
+      this.opening = this.open().finally(() => {
+        this.opening = null;
+      });
+    }
+    return this.opening;
+  }
+
+  private open(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       try {
         const ws = new WebSocket(this.url);
@@ -63,24 +74,41 @@ export class WebSocketClient implements IGameConnection {
           }
 
           // Livraison asynchrone (microtask) conformément au contrat IGameConnection
-          queueMicrotask(() => {
-            for (const handler of Array.from(this.handlers)) {
-              try {
-                handler(message);
-              } catch (handlerError) {
-                console.error('[WebSocketClient] Erreur dans un handler :', handlerError);
-              }
-            }
-          });
+          queueMicrotask(() => this.deliver(ws, message));
         });
 
         ws.addEventListener('close', () => {
-          this.socket = null;
+          // Une socket fermée par `disconnect()` signale sa fermeture plus tard, parfois
+          // après l'ouverture de la suivante : elle ne doit pas effacer cette dernière.
+          if (this.socket === ws) {
+            this.socket = null;
+          }
         });
       } catch (err) {
         reject(err);
       }
     });
+  }
+
+  /** Livre aux abonnés un message reçu par la socket `from`. */
+  private deliver(from: WebSocket, message: ServerMessage): void {
+    // Arrivé avant `disconnect()` mais pas encore livré : il ne l'est jamais.
+    if (this.socket !== from) {
+      return;
+    }
+
+    // On parcourt une copie : un abonné peut s'abonner ou se désabonner pendant la livraison.
+    for (const handler of [...this.handlers]) {
+      // Un abonné retiré en cours de route ne reçoit plus rien, pas même ce message.
+      if (!this.handlers.has(handler)) {
+        continue;
+      }
+      try {
+        handler(message);
+      } catch (handlerError) {
+        console.error('[WebSocketClient] Erreur dans un handler :', handlerError);
+      }
+    }
   }
 
   /**

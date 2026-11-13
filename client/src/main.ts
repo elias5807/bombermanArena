@@ -8,6 +8,7 @@ import { loadSprites } from './render/sprites/loadSprites';
 import { GameTimer } from './ui/gameTimer';
 import { Hud } from './ui/hud';
 import { LobbyView } from './ui/lobbyList';
+import { renderLobbyPlayers } from './ui/lobbyList';
 import './style.css';
 
 /**
@@ -67,6 +68,20 @@ new LobbyView({ list: lobbyPlayersList, startButton: btnStartGame, startHint }, 
 new Hud(hudPlayerList, app.bus, app.state);
 new GameTimer(timerDisplay, app.bus);
 new GameOverPanel(canvasContainer, app.bus, app.state);
+// Synchronisation de l'affichage du lobby avec le serveur
+app.bus.on('server:LOBBY_STATUS', ({ players }) => {
+  if (!lobbyPlayersList) return;
+  renderLobbyPlayers(lobbyPlayersList, players);
+});
+
+function updateHUD(players: { name?: string; playerId: string }[]) {
+  players.forEach((p, idx) => {
+    const item = document.querySelector(`.player-item.p${idx + 1} .player-name`);
+    if (item && p.name) {
+      item.textContent = `${p.name} (P${idx + 1})`;
+    }
+  });
+}
 
 function launchGame() {
   if (gameScreen.classList.contains('hidden')) {
