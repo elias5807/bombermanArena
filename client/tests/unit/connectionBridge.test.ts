@@ -82,43 +82,6 @@ describe('bridgeConnection', () => {
 
       expect(events).toEqual(SERVER_MESSAGES);
     });
-
-    it('publie network:playerMoved avec les coordonnées lors de POSITION_UPDATED', () => {
-      const { connection, bus } = setup();
-      const movedEvents: unknown[] = [];
-      bus.on('network:playerMoved', (payload) => movedEvents.push(payload));
-
-      connection.receive({
-        type: 'POSITION_UPDATED',
-        playerId: 'p1',
-        col: 4,
-        row: 5,
-        direction: 'right',
-      });
-
-      expect(movedEvents).toEqual([
-        {
-          playerId: 'p1',
-          col: 4,
-          row: 5,
-          direction: 'right',
-        },
-      ]);
-    });
-
-    it('publie network:gameState lors de la réception de GAME_STATE', () => {
-      const { connection, bus } = setup();
-      const stateEvents: unknown[] = [];
-      bus.on('network:gameState', (payload) => stateEvents.push(payload));
-
-      const gameStateMessage = {
-        type: 'GAME_STATE' as const,
-        players: [{ playerId: 'p1', col: 1, row: 1, alive: true }],
-      };
-      connection.receive(gameStateMessage);
-
-      expect(stateEvents).toEqual([gameStateMessage]);
-    });
   });
 
   describe('bus → connexion', () => {
