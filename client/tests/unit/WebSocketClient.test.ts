@@ -332,6 +332,129 @@ describe('WebSocketClient', () => {
     });
   });
 
+  describe('coupure venue du serveur', () => {
+    /** Crée un client connecté dont les coupures signalées s'accumulent dans `closes`. */
+    async function createWatchedClient() {
+      const connected = await createConnectedClient();
+      const closes = vi.fn();
+      connected.client.onClose(closes);
+      return { ...connected, closes };
+    }
+
+    it('est signalée une fois quand le serveur ferme la connexion', async () => {
+      const { client, socket, closes } = await createWatchedClient();
+
+      socket.simulateError();
+      socket.simulateClose(1006);
+      await flushDeliveries();
+
+      expect(closes).toHaveBeenCalledTimes(1);
+      expect(() => client.send(join)).toThrow(/connexion n'est pas ouverte/);
+    });
+
+    it('est signalée de façon asynchrone, après les messages reçus avant elle', async () => {
+      const { client, socket } = await createConnectedClient();
+      const log: string[] = [];
+      client.onMessage((message) => log.push(message.type));
+      client.onClose(() => log.push('coupure'));
+
+      socket.simulateMessage(joinedAlice);
+      socket.simulateClose();
+      expect(log).toEqual([]);
+
+      await flushDeliveries();
+      expect(log).toEqual(['PLAYER_JOINED', 'coupure']);
+    });
+
+    it("n'est pas signalée quand l'ouverture échoue : connect() est rejetée", async () => {
+      const { client } = createClient();
+      const closes = vi.fn();
+      client.onClose(closes);
+      const connecting = client.connect();
+
+      lastSocket().simulateError();
+      lastSocket().simulateClose(1006);
+
+      await expect(connecting).rejects.toThrow(URL);
+      expect(closes).not.toHaveBeenCalled();
+    });
+
+    it("n'est pas signalée après disconnect(), même quand la socket finit de se fermer", async () => {
+      const { client, socket, closes } = await createWatchedClient();
+
+      client.disconnect();
+      socket.simulateClose(1000);
+      await flushDeliveries();
+
+      expect(closes).not.toHaveBeenCalled();
+    });
+
+    it("n'est pas signalée si disconnect() est appelée avant que le signal parte", async () => {
+      const { client, socket, closes } = await createWatchedClient();
+
+      socket.simulateClose();
+      client.disconnect();
+      await flushDeliveries();
+
+      expect(closes).not.toHaveBeenCalled();
+    });
+
+    it("n'est pas signalée pour l'ancienne socket qui se ferme après une reconnexion", async () => {
+      const { client, socket: oldSocket, closes } = await createWatchedClient();
+      client.disconnect();
+      const socket = await open(client);
+
+      oldSocket.simulateClose(1000);
+      await flushDeliveries();
+
+      expect(closes).not.toHaveBeenCalled();
+      expect(() => client.send(join)).not.toThrow();
+      expect(socket.sent).toEqual([JSON.stringify(join)]);
+    });
+
+    it('permet de rouvrir une connexion, dont la coupure est signalée à son tour', async () => {
+      const { client, socket: first, closes } = await createWatchedClient();
+      first.simulateClose();
+      await flushDeliveries();
+
+      const second = await open(client);
+      second.simulateClose();
+      await flushDeliveries();
+
+      expect(FakeWebSocket.instances).toHaveLength(2);
+      expect(closes).toHaveBeenCalledTimes(2);
+    });
+
+    it("n'appelle plus un abonné qui s'est désabonné", async () => {
+      const { client, socket, closes } = await createWatchedClient();
+      const unsubscribed = vi.fn();
+      client.onClose(unsubscribed)();
+
+      socket.simulateClose();
+      await flushDeliveries();
+
+      expect(unsubscribed).not.toHaveBeenCalled();
+      expect(closes).toHaveBeenCalledTimes(1);
+    });
+
+    it('isole un abonné qui échoue : les autres sont prévenus', async () => {
+      const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const { client, socket } = await createConnectedClient();
+      const failure = new Error('abonné défaillant');
+      client.onClose(() => {
+        throw failure;
+      });
+      const closes = vi.fn();
+      client.onClose(closes);
+
+      socket.simulateClose();
+      await flushDeliveries();
+
+      expect(closes).toHaveBeenCalledTimes(1);
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('WebSocketClient'), failure);
+    });
+  });
+
   describe('envoi de messages', () => {
     it('envoie le message sérialisé en JSON, dans l’ordre', async () => {
       const { client, socket } = await createConnectedClient();
