@@ -1,8 +1,18 @@
 import type { LobbyStatusMessage } from '@shared/protocol/messages';
+import type { AppEventBus } from '../core/AppEvents';
+import type { GameState } from '../state/GameState';
 
 /** Nombre d'emplacements du salon, occupés ou non. */
 const LOBBY_SLOTS = 4;
 
+/** Nombre de joueurs à partir duquel la partie peut être lancée. */
+export const MIN_PLAYERS_TO_START = 2;
+
+type LobbyPlayers = LobbyStatusMessage['players'];
+
+/**
+ * Reconstruit les emplacements du salon d'attente à partir de la liste envoyée par le serveur.
+ * L'emplacement de `localPlayerId`, s'il est connu, porte la mention « (vous) ».
 /**
  * Reconstruit les emplacements du salon d'attente à partir de la liste envoyée par le serveur.
  *
@@ -11,6 +21,13 @@ const LOBBY_SLOTS = 4;
  */
 export function renderLobbyPlayers(
   list: HTMLUListElement,
+  players: LobbyPlayers,
+  localPlayerId: string | null = null,
+): void {
+  const items: HTMLLIElement[] = [];
+  for (let i = 0; i < LOBBY_SLOTS; i++) {
+    const player = players[i];
+    items.push(createSlot(i + 1, player?.playerName, player?.playerId === localPlayerId));
   players: LobbyStatusMessage['players'],
 ): void {
   const items: HTMLLIElement[] = [];

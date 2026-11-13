@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { LobbyStatusMessage } from '@shared/protocol/messages';
+import type { AppEvents } from '../../src/core/AppEvents';
+import { EventBus } from '../../src/core/EventBus';
+import { LobbyView, renderLobbyPlayers } from '../../src/ui/lobbyList';
 import { renderLobbyPlayers } from '../../src/ui/lobbyList';
 
 type LobbyPlayers = LobbyStatusMessage['players'];

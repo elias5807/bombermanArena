@@ -137,7 +137,7 @@ l'intéresse, sans jamais appeler une autre couche directement.
 | `src/state/`   | État local du jeu, alimenté par les événements serveur                        |
 | `src/input/`   | `KeyboardInput` : flèches et espace traduits en `input:move`, `input:bomb`    |
 | `src/render/`  | Rendu PixiJS : lit l'état, dessine, ne le modifie jamais                      |
-| `src/ui/`      | Menu, lobby, HUD                                                              |
+| `src/ui/`      | Écrans branchés sur le bus : salon, HUD, chrono, fin de partie                |
 | `src/mocks/`   | Scénarios de parties rejoués hors ligne                                       |
 
 `src/App.ts` assemble ces couches (voir « Assemblage » plus bas) et `src/main.ts` le démarre.
@@ -199,24 +199,24 @@ vient l'information : `connection:` la liaison avec le serveur, `server:` ce que
 annonce, `input:` ce que le joueur demande, `session:` ce que le client sait de lui-même,
 `state:` ce qu'il déduit de l'état du jeu.
 
-| Événement                 | Donnée                   | Publié par                                        | Écouté par                            |
-| ------------------------- | ------------------------ | ------------------------------------------------- | ------------------------------------- |
-| `connection:opened`       | —                        | `App`, une fois la connexion ouverte              | `main.ts`, `ui/`                      |
-| `connection:closed`       | —                        | `App.stop()`, si la connexion était ouverte       | `ui/`                                 |
-| `connection:error`        | `{ error }`              | `App` (ouverture impossible), pont (envoi échoué) | `ui/`                                 |
-| `server:PLAYER_JOINED`    | `PlayerJoinedMessage`    | pont connexion ↔ bus, à la réception du message   | pont (détection playerId)             |
-| `server:LOBBY_STATUS`     | `LobbyStatusMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (affichage salon), `state/` |
-| `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (lancement), `state/`       |
-| `server:GAME_STATE`       | `GameStateMessage`       | pont connexion ↔ bus, à la réception du message   | `GameScene`, `main.ts`, `state/`      |
-| `server:POSITION_UPDATED` | `PositionUpdatedMessage` | pont connexion ↔ bus, à la réception du message   | `GameScene` (déplacement du sprite)   |
-| `server:BOMB_PLACED`      | `BombPlacedMessage`      | pont connexion ↔ bus, à la réception du message   | `GameScene` (affichage bombe posée)   |
-| `server:BOMB_EXPLODED`    | `BombExplodedMessage`    | pont connexion ↔ bus, à la réception du message   | `GameScene`, `state/` (éliminations)  |
-| `input:join`              | `{ playerName }`         | `main.ts` (écran de connexion)                    | pont, qui envoie `JOIN_LOBBY`         |
-| `input:move`              | `{ direction }`          | `input/` (`KeyboardInput`, flèches)               | pont, qui envoie `MOVE`               |
-| `input:bomb`              | —                        | `input/` (`KeyboardInput`, barre d'espace)        | pont, qui envoie `PLACE_BOMB`         |
-| `input:start`             | —                        | `main.ts` (bouton lancer partie)                  | pont, qui envoie `START_GAME`         |
-| `session:joined`          | `{ playerId }`           | pont, au 1er `PLAYER_JOINED` après `JOIN_LOBBY`   | `state/` (`GameState`)                |
-| `state:gameOver`          | `{ winnerId, outcome }`  | `state/` (`GameState`), une fois par partie       | `main.ts` (encart de fin de partie)   |
+| Événement                 | Donnée                   | Publié par                                        | Écouté par                                                   |
+| ------------------------- | ------------------------ | ------------------------------------------------- | ------------------------------------------------------------ |
+| `connection:opened`       | —                        | `App`, une fois la connexion ouverte              | `main.ts`, `ui/`                                             |
+| `connection:closed`       | —                        | `App.stop()`, si la connexion était ouverte       | `ui/`                                                        |
+| `connection:error`        | `{ error }`              | `App` (ouverture impossible), pont (envoi échoué) | `ui/`                                                        |
+| `server:PLAYER_JOINED`    | `PlayerJoinedMessage`    | pont connexion ↔ bus, à la réception du message   | pont (détection playerId)                                    |
+| `server:LOBBY_STATUS`     | `LobbyStatusMessage`     | pont connexion ↔ bus, à la réception du message   | `ui/` (`LobbyView` : salon, bouton « Lancer »)               |
+| `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | `main.ts` (lancement), `state/`, `ui/` (HUD, chrono, encart) |
+| `server:GAME_STATE`       | `GameStateMessage`       | pont connexion ↔ bus, à la réception du message   | `GameScene`, `main.ts`, `state/`, `ui/` (`Hud`)              |
+| `server:POSITION_UPDATED` | `PositionUpdatedMessage` | pont connexion ↔ bus, à la réception du message   | `GameScene` (déplacement du sprite)                          |
+| `server:BOMB_PLACED`      | `BombPlacedMessage`      | pont connexion ↔ bus, à la réception du message   | `GameScene` (affichage bombe posée)                          |
+| `server:BOMB_EXPLODED`    | `BombExplodedMessage`    | pont connexion ↔ bus, à la réception du message   | `GameScene`, `state/` (éliminations), `ui/` (`Hud`)          |
+| `input:join`              | `{ playerName }`         | `main.ts` (écran de connexion)                    | pont, qui envoie `JOIN_LOBBY`                                |
+| `input:move`              | `{ direction }`          | `input/` (`KeyboardInput`, flèches)               | pont, qui envoie `MOVE`                                      |
+| `input:bomb`              | —                        | `input/` (`KeyboardInput`, barre d'espace)        | pont, qui envoie `PLACE_BOMB`                                |
+| `input:start`             | —                        | `main.ts` (bouton lancer partie)                  | pont, qui envoie `START_GAME`                                |
+| `session:joined`          | `{ playerId }`           | pont, au 1er `PLAYER_JOINED` après `JOIN_LOBBY`   | `state/` (`GameState`), `ui/` (`LobbyView`)                  |
+| `state:gameOver`          | `{ winnerId, outcome }`  | `state/` (`GameState`), une fois par partie       | `ui/` (`GameOverPanel`, `GameTimer`)                         |
 
 Points à connaître :
 
