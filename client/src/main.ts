@@ -3,6 +3,7 @@ import { App } from './App';
 import { PixiRenderer } from './render/PixiRenderer';
 import { GameScene } from './render/scenes/GameScene';
 import { loadSprites } from './render/sprites/loadSprites';
+import { renderLobbyPlayers } from './ui/lobbyList';
 import './style.css';
 
 /**
@@ -56,18 +57,7 @@ void app.start();
 // Synchronisation de l'affichage du lobby avec le serveur
 app.bus.on('server:LOBBY_STATUS', ({ players }) => {
   if (!lobbyPlayersList) return;
-  lobbyPlayersList.innerHTML = '';
-  for (let i = 0; i < 4; i++) {
-    const player = players[i];
-    const li = document.createElement('li');
-    li.className = player ? 'lobby-player ready' : 'lobby-player waiting';
-    li.innerHTML = `
-      <img src="/assets/sprites/joueur_${i + 1}.png" class="pixel-avatar" alt="P${i + 1}" />
-      <span>${player ? `P${i + 1}: ${player.playerName}` : `P${i + 1}: En attente...`}</span>
-      <span class="status">${player ? 'PRÊT' : 'ATTENTE'}</span>
-    `;
-    lobbyPlayersList.appendChild(li);
-  }
+  renderLobbyPlayers(lobbyPlayersList, players);
 });
 
 function updateHUD(players: { name?: string; playerId: string }[]) {
