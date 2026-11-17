@@ -35,6 +35,9 @@ export class GameScene implements Scene {
   private texturesReady = false;
   private textures: Record<string, Texture> = {};
 
+  // Timer (en secondes)
+  private timer: number = 165;
+
   constructor(grid: GridSize) {
     this.grid = grid;
     
@@ -46,6 +49,8 @@ export class GameScene implements Scene {
 
     this.generateMap();
     this.loadSprites();
+
+    this.renderTimer();
   }
 
   /**
@@ -102,6 +107,22 @@ export class GameScene implements Scene {
     if (this.currentLayout) {
       this.drawAll();
     }
+  }
+
+  private formatTime(seconds: number): string {
+    return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+  }
+
+  private renderTimer() {
+    const timerStr: HTMLElement | null = document.getElementById("timer");
+    if(timerStr)
+      timerStr.innerText = this.formatTime(this.timer);
+
+    this.timer--;
+
+    if (this.timer < 0) return;
+
+    setTimeout(() => this.renderTimer(), 1000);
   }
 
   private generateMap() {
