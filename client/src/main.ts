@@ -46,7 +46,6 @@ const btnLogin = document.getElementById('btn-login') as HTMLButtonElement;
 const btnRetry = document.getElementById('btn-retry') as HTMLButtonElement;
 const btnShowHelpLogin = document.getElementById('btn-show-help-login') as HTMLButtonElement;
 const btnShowHelpGame = document.getElementById('btn-show-help-game') as HTMLButtonElement;
-const btnCloseHelp = document.getElementById('btn-close-help') as HTMLButtonElement;
 const btnStartGame = document.getElementById('btn-start-game') as HTMLButtonElement;
 const btnLeaveLobby = document.getElementById('btn-leave-lobby') as HTMLButtonElement;
 const btnQuit = document.getElementById('btn-quit') as HTMLButtonElement;
@@ -56,15 +55,22 @@ let rendering: Promise<{ renderer: PixiRenderer; sprites: SpriteTextures }> | nu
 let cachedGameState: GameStateMessage | null = null;
 
 // Interactions Help Panel
+function toggleHelp() {
+  if(helpPanel.classList.contains('hidden')) {
+    showHelp()
+  } else {
+    hideHelp()
+  }
+}
+
 function showHelp() {
   helpPanel.classList.remove('hidden');
 }
 function hideHelp() {
   helpPanel.classList.add('hidden');
 }
-btnShowHelpLogin.addEventListener('click', showHelp);
-btnShowHelpGame.addEventListener('click', showHelp);
-btnCloseHelp.addEventListener('click', hideHelp);
+btnShowHelpLogin.addEventListener('click', toggleHelp);
+btnShowHelpGame.addEventListener('click', toggleHelp);
 
 // Initialisation du bus et de l'état de la connexion
 const app = new App();

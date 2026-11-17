@@ -56,24 +56,21 @@
         <!-- Écran de Jeu / Vault Tech HUD -->
         <div id="game-screen" class="panel vault-tech hidden">
           <div class="hud-left">
+            <div class="logo-mini">BOMBERMAN<br />ARENA</div>
             <div class="timer">00:00</div>
             <!-- Rempli par ui/hud.ts -->
             <div class="player-list"></div>
-          </div>
 
-          <div id="canvas-container" class="game-center"></div>
-
-          <div class="hud-right">
-            <div class="logo-mini">BOMBERMAN<br />ARENA</div>
             <button id="btn-show-help-game" class="btn round-help">?</button>
             <button id="btn-quit" class="btn danger">Quitter</button>
           </div>
+
+          <div id="canvas-container" class="game-center"></div>
         </div>
       </div>
 
       <!-- Panneau latéral d'aide / Manuel tactique -->
       <div id="help-panel" class="right-column steel-door hidden">
-        <button id="btn-close-help" class="btn close-x">✕</button>
         <h2>Manuel tactique</h2>
         <div class="help-content">
           <p>Déplacez votre agent dans l'arène et éliminez vos rivaux à l'aide de bombes.</p>
