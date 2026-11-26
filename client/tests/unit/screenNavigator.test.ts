@@ -144,14 +144,14 @@ describe('ScreenNavigator', () => {
   });
 
   describe('salon → partie', () => {
-    it('« Lancer la partie » publie input:start et affiche la partie', () => {
+    it('« Lancer la partie » publie input:start sans quitter le salon : le serveur décide', () => {
       const { elements, navigator, visible, named } = inLobby();
 
       elements.startButton.click();
 
       expect(named('input:start')).toHaveLength(1);
-      expect(navigator.screen).toBe('game');
-      expect(visible()).toEqual(['game']);
+      expect(navigator.screen).toBe('lobby');
+      expect(visible()).toEqual(['lobby']);
     });
 
     it('server:GAME_STARTED affiche la partie chez tous les joueurs', () => {

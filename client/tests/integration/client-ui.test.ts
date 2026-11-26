@@ -164,6 +164,21 @@ describe('client monté sur index.html', () => {
     expect(texts('.player-name')).toEqual(['Alice (vous)', 'Bob']);
   });
 
+  it('« Lancer la partie » attend le GAME_STARTED du serveur pour afficher la partie', async () => {
+    const client = await mount();
+    joinLobby(client);
+
+    click('#btn-start-game');
+    await settle();
+    expect(client.sentTypes()).toEqual(['JOIN_LOBBY', 'START_GAME']);
+    expect(visibleScreens()).toEqual(['#lobby-screen']);
+    expect(client.renderer.scenes).toHaveLength(0);
+
+    await serverStartsGame(client);
+    expect(visibleScreens()).toEqual(['#game-screen']);
+    expect(client.renderer.scenes).toHaveLength(1);
+  });
+
   it('le plateau démarre PixiJS une fois l’écran de jeu affiché', async () => {
     const client = await mount();
     joinLobby(client);

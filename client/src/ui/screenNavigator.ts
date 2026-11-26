@@ -46,8 +46,9 @@ export interface NavigationDependencies {
  * Navigation entre les écrans de `index.html` : connexion, salle d'attente et partie.
  *
  * - « Rejoindre », ou Entrée dans le champ du pseudo, publie `input:join` puis affiche le salon ;
- * - « Lancer la partie » publie `input:start` puis affiche la partie, que `server:GAME_STARTED`
- *   affiche aussi chez les autres joueurs. Le plateau (`GameView`) suit le serveur, pas l'écran ;
+ * - « Lancer la partie » publie `input:start`, sans changer d'écran : c'est `server:GAME_STARTED`
+ *   qui affiche la partie, chez tous les joueurs, car le serveur peut refuser le lancement. Le
+ *   plateau (`GameView`) suit lui aussi le serveur, pas l'écran ;
  * - « Retour au login » et « Quitter » ferment la connexion, ce qui retire le joueur du
  *   serveur, puis en ouvrent une neuve ;
  * - `connection:lost` ramène aussi à l'écran de connexion.
@@ -94,10 +95,7 @@ export class ScreenNavigator {
         elements.joinButton.click();
       }
     });
-    elements.startButton.addEventListener('click', () => {
-      bus.emit('input:start');
-      this.show('game');
-    });
+    elements.startButton.addEventListener('click', () => bus.emit('input:start'));
     elements.leaveLobbyButton.addEventListener('click', () => this.leave());
     elements.quitButton.addEventListener('click', () => this.leave());
   }

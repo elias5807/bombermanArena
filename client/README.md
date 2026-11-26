@@ -408,9 +408,11 @@ Les autres modules de `ui/` (état de la connexion, salon, HUD, chrono, fin de p
 
 Points à connaître :
 
-- `ScreenNavigator` ne parle au serveur que par le bus. Il reçoit la session (`App`) et les vues
-  de la session : un retour à l'écran de connexion (« Retour au login », « Quitter », coupure)
-  recrée le salon, le HUD, le chrono et l'encart de fin de partie.
+- `ScreenNavigator` ne parle au serveur que par le bus, et ne change d'écran que sur son ordre :
+  « Lancer la partie » envoie la demande, `GAME_STARTED` affiche l'écran de jeu chez tous les
+  joueurs. Il reçoit la session (`App`) et les vues de la session : un retour à l'écran de
+  connexion (« Retour au login », « Quitter », coupure) recrée le salon, le HUD, le chrono et
+  l'encart de fin de partie.
 - `GameView` suit le serveur, pas l'écran : chaque `GAME_STARTED` lui fait afficher une scène
   neuve, même si la partie précédente est encore à l'écran (partie relancée pendant l'encart de
   fin). Il est créé après `ScreenNavigator` : l'écran de jeu est déjà visible quand PixiJS démarre
