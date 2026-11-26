@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type { Sprite } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlayerStateDTO } from '@shared/protocol/messages';
 import indexHtml from '../../index.html?raw';
@@ -66,18 +67,33 @@ async function mount() {
   const keyboard = fakeKeyboard();
   /** Les écrans visibles quand le plateau a démarré PixiJS. */
   const screensWhenRendering: string[][] = [];
+  const textures = blankTextures();
   await mountClient(document, new App(connection), {
     rendering: {
       createRenderer: () => {
         screensWhenRendering.push(visibleScreens());
         return Promise.resolve(renderer);
       },
-      loadSprites: () => Promise.resolve(blankTextures()),
+      loadSprites: () => Promise.resolve(textures),
     },
     keyboard: keyboard.source,
   });
   const sentTypes = () => connection.sent.map(({ type }) => type);
-  return { connection, renderer, press: keyboard.press, sentTypes, screensWhenRendering };
+  /** Couleur (1 à 4) de chaque joueur du plateau, dans l'ordre où la scène les a dessinés. */
+  const boardColors = () => {
+    const playerTextures = [textures.player1, textures.player2, textures.player3, textures.player4];
+    const [, , entities] = renderer.current.view.children;
+    const [, players] = entities.children;
+    return players.children.map((sprite) => playerTextures.indexOf((sprite as Sprite).texture) + 1);
+  };
+  return {
+    connection,
+    renderer,
+    press: keyboard.press,
+    sentTypes,
+    screensWhenRendering,
+    boardColors,
+  };
 }
 
 type Client = Awaited<ReturnType<typeof mount>>;
@@ -260,6 +276,23 @@ describe('client monté sur index.html', () => {
     expect(sceneContent(renderer.current)).toEqual({ players: 2, effects: 0 });
     expect(texts('.game-over:not(.hidden)')).toEqual([]);
     expect(texts('.player-status')).toEqual(['En jeu', 'En jeu']);
+  });
+
+  it('après une relance, le HUD et le plateau donnent la même couleur à chaque joueur', async () => {
+    const client = await mount();
+    joinLobby(client);
+    // Bob est le premier joueur de la partie ; il quitte, puis revient sous un autre identifiant.
+    await serverStartsGame(client, [BOB, ALICE]);
+    client.connection.receive({ type: 'GAME_STATE', players: [ALICE] });
+    client.connection.receive({ type: 'PLAYER_JOINED', playerId: 'p3', playerName: 'Bob' });
+
+    await serverStartsGame(client, [ALICE, { ...BOB, playerId: 'p3' }]);
+
+    const hudColors = Array.from(document.querySelectorAll('.player-item'), (row) =>
+      Number(/\bp([1-4])\b/.exec(row.className)?.[1]),
+    );
+    expect(client.boardColors()).toEqual([1, 2]);
+    expect(hudColors).toEqual(client.boardColors());
   });
 
   it('« Quitter » ferme la connexion, remet l’écran de connexion à zéro et en rouvre une', async () => {

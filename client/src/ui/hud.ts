@@ -13,10 +13,11 @@ const PLAYER_COLORS = 4;
  * arrivent ici (`App` l'abonne en premier). Les noms viennent des autres joueurs :
  * ils passent par `textContent`.
  *
- * Chaque joueur garde la couleur reçue à sa première apparition, selon son rang dans
- * le `GAME_STATE` : la même règle que `GameScene`, pour que la ligne et le sprite du
- * plateau aient la même couleur. Comme `GameScene`, créée au premier `GAME_STARTED`,
- * le HUD ignore les `GAME_STATE` du salon : il reste vide jusque-là.
+ * Pendant une partie, chaque joueur garde la couleur reçue à sa première apparition, selon
+ * son rang dans le `GAME_STATE` : la même règle que `GameScene`, pour que la ligne et le
+ * sprite du plateau aient la même couleur. Le plateau ayant une scène neuve à chaque partie,
+ * le HUD redistribue lui aussi les couleurs à chaque `GAME_STARTED`. Comme `GameScene`, créée
+ * au premier `GAME_STARTED`, le HUD ignore les `GAME_STATE` du salon : il reste vide jusque-là.
  */
 export class Hud {
   private readonly list: HTMLElement;
@@ -36,6 +37,7 @@ export class Hud {
       // Le GAME_STATE qui suit aussitôt GAME_STARTED donne les noms : il sera affiché.
       bus.on('server:GAME_STARTED', () => {
         this.started = true;
+        this.colors.clear();
       }),
       bus.on('server:GAME_STATE', () => this.render()),
       bus.on('server:BOMB_EXPLODED', () => this.render()),

@@ -160,6 +160,20 @@ describe('Hud', () => {
     expect(describeRows(game.list).map((row) => row.status)).toEqual(['En jeu', 'En jeu']);
   });
 
+  it('redistribue les couleurs à chaque partie, comme le plateau', () => {
+    game.start('p1', 'p2');
+    game.gameState([ALICE, BOB]);
+    // Alice quitte, revient sous un autre identifiant et passe après Bob.
+    game.gameState([BOB]);
+    game.start('p2', 'p4');
+    game.gameState([BOB, { playerId: 'p4', name: 'Alice' }]);
+
+    expect(describeRows(game.list).map(({ className, name }) => ({ className, name }))).toEqual([
+      { className: 'player-item p1', name: 'Bob' },
+      { className: 'player-item p2', name: 'Alice' },
+    ]);
+  });
+
   it('affiche un nom contenant du HTML comme du texte', () => {
     game.start('p1');
     game.gameState([{ playerId: 'p1', name: XSS_NAME }]);
