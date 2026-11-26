@@ -115,7 +115,7 @@ export class GameScene implements Scene {
    * Applique un état complet du jeu : la carte, et les joueurs (créés, déplacés, ou retirés
    * de l'écran quand ils sont absents du message).
    *
-   * La scène l'appelle pour chaque `server:GAME_STATE` ; `main.ts` l'appelle aussi une fois,
+   * La scène l'appelle pour chaque `server:GAME_STATE` ; `GameView` l'appelle aussi une fois,
    * à sa création, avec l'état reçu avant qu'elle existe.
    */
   handleGameState(message: GameStateMessage): void {
