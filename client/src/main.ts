@@ -1,11 +1,8 @@
-import type { GameStateMessage } from '@shared/protocol/messages';
 import { App } from './App';
 import { SERVER_URL } from './config';
 import { GameOverPanel } from './ui/gameOverMessage';
 import { KeyboardInput } from './input/KeyboardInput';
-import { PixiRenderer } from './render/PixiRenderer';
-import { GameScene } from './render/scenes/GameScene';
-import { loadSprites, type SpriteTextures } from './render/sprites/loadSprites';
+import { GameView } from './render/GameView';
 import { ConnectionStatus } from './ui/connectionStatus';
 import { GameTimer } from './ui/gameTimer';
 import { HelpPanel } from './ui/helpPanel';
@@ -25,8 +22,6 @@ import './style.css';
  * « Retour au login » et « Quitter » ferment la connexion, ce qui retire le joueur du
  * serveur, puis en ouvrent une neuve. Une coupure ramène aussi à l'écran de connexion.
  */
-
-const DEMO_GRID = { columns: 15, rows: 13 };
 
 // DOM Elements
 const loginScreen = document.getElementById('login-screen') as HTMLElement;
@@ -52,10 +47,6 @@ const btnStartGame = document.getElementById('btn-start-game') as HTMLButtonElem
 const btnLeaveLobby = document.getElementById('btn-leave-lobby') as HTMLButtonElement;
 const btnQuit = document.getElementById('btn-quit') as HTMLButtonElement;
 
-/** Moteur de rendu et sprites, préparés au premier lancement de partie puis réutilisés. */
-let rendering: Promise<{ renderer: PixiRenderer; sprites: SpriteTextures }> | null = null;
-let cachedGameState: GameStateMessage | null = null;
-
 new HelpPanel({
   panel: helpPanel,
   openButtons: [btnShowHelpLogin, btnShowHelpGame],
@@ -74,6 +65,7 @@ new ConnectionStatus(
   app.bus,
   { serverUrl: SERVER_URL, retry: () => void app.start() },
 );
+const board = new GameView(canvasContainer, app.bus);
 
 /** Écrans tenus à jour d'après le bus, recréés à neuf pour chaque session. */
 function mountScreens(): { dispose(): void }[] {
@@ -99,7 +91,7 @@ function showLoginScreen() {
     screen.dispose();
   }
   screens = mountScreens();
-  cachedGameState = null;
+  board.reset();
 
   lobbyScreen.classList.add('hidden');
   gameScreen.classList.add('hidden');
@@ -115,43 +107,13 @@ function leaveSession() {
 
 app.bus.on('connection:lost', showLoginScreen);
 
-function startRendering() {
-  return PixiRenderer.create(canvasContainer).then(async (renderer) => ({
-    renderer,
-    sprites: await loadSprites(),
-  }));
-}
-
 function launchGame() {
   if (gameScreen.classList.contains('hidden')) {
     lobbyScreen.classList.add('hidden');
     gameScreen.classList.remove('hidden');
-
-    rendering ??= startRendering().catch((error: unknown) => {
-      rendering = null; // nouvel essai à la partie suivante
-      throw error;
-    });
-    rendering
-      .then(({ renderer, sprites }) => {
-        // Une scène neuve à chaque partie : `setScene` détruit la précédente, ses sprites
-        // et ses bombes. Elle écoute le bus à partir de maintenant : l'état arrivé avant
-        // elle lui est donné une fois, les suivants lui parviennent directement.
-        const scene = new GameScene(cachedGameState?.grid ?? DEMO_GRID, sprites, app.bus);
-        renderer.setScene(scene);
-        if (cachedGameState) {
-          scene.handleGameState(cachedGameState);
-        }
-      })
-      .catch((error: unknown) => {
-        console.error("Impossible d'initialiser le rendu :", error);
-      });
+    void board.showNewGame();
   }
 }
-
-// Mise en cache de l'état du jeu pour la GameScene créée après son arrivée
-app.bus.on('server:GAME_STATE', (msg) => {
-  cachedGameState = msg;
-});
 
 // Lancement automatique synchronisé quand le serveur annonce le début de partie
 app.bus.on('server:GAME_STARTED', () => {
