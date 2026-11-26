@@ -8,6 +8,7 @@ import { GameScene } from './render/scenes/GameScene';
 import { loadSprites, type SpriteTextures } from './render/sprites/loadSprites';
 import { ConnectionStatus } from './ui/connectionStatus';
 import { GameTimer } from './ui/gameTimer';
+import { HelpPanel } from './ui/helpPanel';
 import { Hud } from './ui/hud';
 import { LobbyView } from './ui/lobbyList';
 import './style.css';
@@ -55,16 +56,11 @@ const btnQuit = document.getElementById('btn-quit') as HTMLButtonElement;
 let rendering: Promise<{ renderer: PixiRenderer; sprites: SpriteTextures }> | null = null;
 let cachedGameState: GameStateMessage | null = null;
 
-// Interactions Help Panel
-function showHelp() {
-  helpPanel.classList.remove('hidden');
-}
-function hideHelp() {
-  helpPanel.classList.add('hidden');
-}
-btnShowHelpLogin.addEventListener('click', showHelp);
-btnShowHelpGame.addEventListener('click', showHelp);
-btnCloseHelp.addEventListener('click', hideHelp);
+new HelpPanel({
+  panel: helpPanel,
+  openButtons: [btnShowHelpLogin, btnShowHelpGame],
+  closeButton: btnCloseHelp,
+});
 
 // Initialisation du bus et de l'état de la connexion
 const app = new App();
