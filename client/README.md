@@ -228,8 +228,9 @@ Points à connaître :
   refuse un nom ou une donnée qui n'y figure pas.
 - `GameScene` n'écoute que les quatre événements de la partie (`GAME_STATE`, `POSITION_UPDATED`,
   `BOMB_PLACED`, `BOMB_EXPLODED`) et dessine ce qu'ils disent, sans rien décider. `GameView` en
-  crée une neuve à chaque `GAME_STARTED`, souvent après le premier `GAME_STATE` : il garde le
-  dernier état reçu et le lui donne une fois, à sa création.
+  crée une neuve à chaque `GAME_STARTED`. Si le `GAME_STATE` de la partie arrive avant elle
+  (pendant le démarrage de PixiJS), il le garde et le lui donne une fois, à sa création ; l'état
+  d'une partie précédente n'est jamais repris.
 - `session:joined` et `state:gameOver` sont **provisoires** : le serveur ne dit ni au client quel
   est son identifiant, ni quand la partie est finie. `state/GameState` publie `state:gameOver`
   quand il reste au plus un joueur en vie après `GAME_STARTED` (éliminations et départs) ;
@@ -415,8 +416,9 @@ Points à connaître :
   l'encart de fin de partie.
 - `GameView` suit le serveur, pas l'écran : chaque `GAME_STARTED` lui fait afficher une scène
   neuve, même si la partie précédente est encore à l'écran (partie relancée pendant l'encart de
-  fin). Il est créé après `ScreenNavigator` : l'écran de jeu est déjà visible quand PixiJS démarre
-  et mesure son conteneur.
+  fin). La scène neuve ne reprend rien de la partie précédente, sauf les dimensions du plateau :
+  elle attend le `GAME_STATE` qui suit. `GameView` est créé après `ScreenNavigator` : l'écran de
+  jeu est déjà visible quand PixiJS démarre et mesure son conteneur.
 - Un `id` renommé dans `index.html` fait échouer `tests/unit/pageElements.test.ts` ; à
   l'exécution, le démarrage s'arrête sur un message qui le nomme.
 - `tests/integration/client-ui.test.ts` monte le client sur le vrai `index.html`, avec une fausse

@@ -154,7 +154,7 @@ describe('GameView', () => {
       expect(sceneContent(renderer.current).players).toBe(0);
     });
 
-    it('la scène neuve prend les dimensions et les joueurs du dernier GAME_STATE', async () => {
+    it('de l’état reçu avant la partie, la scène neuve ne garde que les dimensions', async () => {
       const { bus, renderer, startGame } = setup();
       bus.emit('server:GAME_STATE', gameState([ALICE], { columns: 5, rows: 5 }));
       bus.emit('server:GAME_STATE', gameState([ALICE, BOB], { columns: 9, rows: 7 }));
@@ -162,17 +162,36 @@ describe('GameView', () => {
       await startGame();
 
       expect(renderer.current.layout).toMatchObject({ columns: 9, rows: 7 });
-      expect(sceneContent(renderer.current).players).toBe(2);
+      expect(sceneContent(renderer.current).players).toBe(0);
     });
 
-    it('un GAME_STATE sans dimensions laisse celles par défaut', async () => {
+    it('un GAME_STATE sans dimensions garde celles du précédent, ou celles par défaut', async () => {
+      const withoutAny = setup();
+      withoutAny.bus.emit('server:GAME_STATE', gameState([ALICE]));
+      await withoutAny.startGame();
+      expect(withoutAny.renderer.current.layout).toMatchObject(DEFAULT_GRID);
+
       const { bus, renderer, startGame } = setup();
-      bus.emit('server:GAME_STATE', gameState([ALICE]));
+      bus.emit('server:GAME_STATE', gameState([ALICE], { columns: 9, rows: 7 }));
+      bus.emit('server:GAME_STATE', gameState([ALICE, BOB]));
+      await startGame();
+      expect(renderer.current.layout).toMatchObject({ columns: 9, rows: 7 });
+    });
+
+    it('une partie relancée ne montre pas la fin de la précédente', async () => {
+      const { bus, renderer, startGame } = setup();
+      await startGame();
+      const lastOfPrevious = gameState([ALICE, { ...BOB, alive: false }], { columns: 9, rows: 7 });
+      bus.emit('server:GAME_STATE', lastOfPrevious);
+      const applied = vi.spyOn(GameScene.prototype, 'handleGameState');
 
       await startGame();
+      expect(applied).not.toHaveBeenCalled();
+      expect(renderer.current.layout).toMatchObject({ columns: 9, rows: 7 });
+      expect(sceneContent(renderer.current).players).toBe(0);
 
-      expect(renderer.current.layout).toMatchObject(DEFAULT_GRID);
-      expect(sceneContent(renderer.current).players).toBe(1);
+      bus.emit('server:GAME_STATE', gameState([BOB, ALICE], { columns: 9, rows: 7 }));
+      expect(sceneContent(renderer.current).players).toBe(2);
     });
 
     it('l’état arrivé pendant le démarrage du rendu est donné à la scène', async () => {
@@ -190,16 +209,20 @@ describe('GameView', () => {
     });
 
     it('la scène reçoit chaque GAME_STATE une seule fois, l’état gardé compris', async () => {
-      const { bus, startGame } = setup();
+      const { bus, createRenderer, renderer } = setup();
+      const started = deferred<FakeRenderer>();
+      createRenderer.mockReturnValueOnce(started.promise);
       const applied = vi.spyOn(GameScene.prototype, 'handleGameState');
-      const before = gameState([ALICE]);
-      const after = gameState([ALICE, BOB]);
-      bus.emit('server:GAME_STATE', before);
+      const kept = gameState([ALICE]);
+      const next = gameState([ALICE, BOB]);
 
-      await startGame();
-      bus.emit('server:GAME_STATE', after);
+      bus.emit('server:GAME_STARTED', { type: 'GAME_STARTED', players: ['p1', 'p2'] });
+      bus.emit('server:GAME_STATE', kept);
+      started.resolve(renderer);
+      await settle();
+      bus.emit('server:GAME_STATE', next);
 
-      expect(applied.mock.calls).toEqual([[before], [after]]);
+      expect(applied.mock.calls).toEqual([[kept], [next]]);
     });
 
     it.each(['connection:closed', 'connection:lost'] as const)(

@@ -31,9 +31,10 @@ interface Rendering {
  *
  * Le moteur de rendu (PixiJS) et les sprites sont préparés à la première partie, puis
  * réutilisés. Une scène n'entend que les messages publiés après sa création : `GameView`
- * garde donc le dernier `server:GAME_STATE` et le donne une fois à la scène neuve, qui reçoit
- * directement les suivants. Ses dimensions sont celles de cet état, `DEFAULT_GRID` à défaut.
- * L'état reçu est oublié quand la connexion se ferme ou se coupe.
+ * garde donc le dernier `server:GAME_STATE` de la partie et le donne une fois à la scène
+ * neuve, qui reçoit directement les suivants. L'état reçu avant le `GAME_STARTED` (fin de la
+ * partie précédente, salon) n'est pas repris, sauf les dimensions du plateau : `DEFAULT_GRID`
+ * tant qu'aucun état ne les a données. Tout est oublié quand la connexion se ferme ou se coupe.
  *
  * `host` doit être visible quand `server:GAME_STARTED` parvient au plateau : PixiJS mesure sa
  * taille au démarrage. Le plateau vit aussi longtemps que la page.
@@ -49,7 +50,10 @@ export class GameView {
   private readonly loadSprites: () => Promise<SpriteTextures>;
   /** Démarrage du rendu, lancé à la première partie ; `null` avant, ou après un échec. */
   private rendering: Promise<Rendering> | null = null;
+  /** Dernier état de la partie en cours, `null` tant qu'elle n'en a reçu aucun. */
   private latestState: GameStateMessage | null = null;
+  /** Dimensions du plateau, d'après le dernier état qui les donne. */
+  private grid: GridSize = DEFAULT_GRID;
 
   /**
    * @param host Élément qui reçoit le canvas, et dont le canvas suit la taille.
@@ -64,6 +68,7 @@ export class GameView {
     bus.on('server:GAME_STARTED', () => this.showNewGame());
     bus.on('server:GAME_STATE', (message) => {
       this.latestState = message;
+      this.grid = message.grid ?? this.grid;
     });
     // Le serveur a retiré le joueur : la session suivante repart de rien.
     bus.on('connection:closed', () => this.forget());
@@ -75,6 +80,9 @@ export class GameView {
    * dans la console, et la partie suivante réessaie.
    */
   private showNewGame(): void {
+    // Carte et joueurs de la partie précédente ne sont pas ceux de la nouvelle, que le serveur
+    // décrit dans le GAME_STATE qui suit. Les dimensions du plateau, elles, ne changent pas.
+    this.latestState = null;
     this.rendering ??= this.startRendering().catch((error: unknown) => {
       this.rendering = null; // nouvel essai à la partie suivante
       throw error;
@@ -82,7 +90,7 @@ export class GameView {
     this.rendering
       .then(({ renderer, sprites }) => {
         // `setScene` détruit la scène précédente, ses sprites et ses bombes.
-        const scene = new GameScene(this.latestState?.grid ?? DEFAULT_GRID, sprites, this.bus);
+        const scene = new GameScene(this.grid, sprites, this.bus);
         renderer.setScene(scene);
         if (this.latestState) {
           scene.handleGameState(this.latestState);
@@ -95,6 +103,7 @@ export class GameView {
 
   private forget(): void {
     this.latestState = null;
+    this.grid = DEFAULT_GRID;
   }
 
   private async startRendering(): Promise<Rendering> {
