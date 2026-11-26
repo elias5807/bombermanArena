@@ -44,7 +44,6 @@ export function mountClient(page: ParentNode, app: App, options: MountOptions = 
   });
   const navigation = new ScreenNavigator(elements.navigation, app.bus, {
     session: app,
-    board: new GameView(elements.board, app.bus, options.rendering),
     mountSessionViews: () => [
       new LobbyView(elements.lobby, app.bus, app.state),
       new Hud(elements.hudPlayers, app.bus, app.state),
@@ -52,6 +51,9 @@ export function mountClient(page: ParentNode, app: App, options: MountOptions = 
       new GameOverPanel(elements.board, app.bus, app.state),
     ],
   });
+  // Abonné après la navigation : au GAME_STARTED, l'écran de jeu est affiché avant que le
+  // plateau démarre PixiJS, qui mesure son conteneur.
+  new GameView(elements.board, app.bus, options.rendering);
   new KeyboardInput(
     app.bus,
     () => navigation.screen === 'game' && app.state.isLocalPlayerAlive,

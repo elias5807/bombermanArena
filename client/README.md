@@ -201,12 +201,12 @@ annonce, `input:` ce que le joueur demande, `session:` ce que le client sait de 
 | Événement                 | Donnée                   | Publié par                                        | Écouté par                                               |
 | ------------------------- | ------------------------ | ------------------------------------------------- | -------------------------------------------------------- |
 | `connection:opened`       | —                        | `App`, une fois la connexion ouverte              | `ui/` (`ConnectionStatus` : « Rejoindre » actif)         |
-| `connection:closed`       | —                        | `App.stop()`, si la connexion était ouverte       | `state/` (remise à zéro), `ui/` (`ConnectionStatus`)     |
-| `connection:lost`         | —                        | `App`, coupure venue du serveur                   | `state/`, `ui/` (`ScreenNavigator` : écran de connexion) |
+| `connection:closed`       | —                        | `App.stop()`, si la connexion était ouverte       | `state/`, `GameView`, `ui/` (`ConnectionStatus`)         |
+| `connection:lost`         | —                        | `App`, coupure venue du serveur                   | `GameView`, `state/`, `ui/` (écran de connexion)         |
 | `connection:error`        | `{ error }`              | `App` (ouverture impossible), pont (envoi échoué) | `ui/` (`ConnectionStatus` : serveur injoignable)         |
 | `server:PLAYER_JOINED`    | `PlayerJoinedMessage`    | pont connexion ↔ bus, à la réception du message   | pont (détection playerId)                                |
 | `server:LOBBY_STATUS`     | `LobbyStatusMessage`     | pont connexion ↔ bus, à la réception du message   | `ui/` (`LobbyView` : salon, bouton « Lancer »)           |
-| `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | `state/`, `ui/` (écran de jeu, HUD, chrono, encart)      |
+| `server:GAME_STARTED`     | `GameStartedMessage`     | pont connexion ↔ bus, à la réception du message   | `GameView`, `state/`, `ui/` (écran, HUD, chrono, encart) |
 | `server:GAME_STATE`       | `GameStateMessage`       | pont connexion ↔ bus, à la réception du message   | `GameScene`, `GameView`, `state/`, `ui/` (`Hud`)         |
 | `server:POSITION_UPDATED` | `PositionUpdatedMessage` | pont connexion ↔ bus, à la réception du message   | `GameScene` (déplacement du sprite)                      |
 | `server:BOMB_PLACED`      | `BombPlacedMessage`      | pont connexion ↔ bus, à la réception du message   | `GameScene` (affichage bombe posée)                      |
@@ -227,9 +227,9 @@ Points à connaître :
   ligne dans le tableau. Pour un nouvel événement, l'ajouter au catalogue : le compilateur
   refuse un nom ou une donnée qui n'y figure pas.
 - `GameScene` n'écoute que les quatre événements de la partie (`GAME_STATE`, `POSITION_UPDATED`,
-  `BOMB_PLACED`, `BOMB_EXPLODED`) et dessine ce qu'ils disent, sans rien décider. Elle est créée
-  après `GAME_STARTED`, donc souvent après le premier `GAME_STATE` : `GameView` garde le dernier
-  état reçu et le lui donne une fois, à sa création.
+  `BOMB_PLACED`, `BOMB_EXPLODED`) et dessine ce qu'ils disent, sans rien décider. `GameView` en
+  crée une neuve à chaque `GAME_STARTED`, souvent après le premier `GAME_STATE` : il garde le
+  dernier état reçu et le lui donne une fois, à sa création.
 - `session:joined` et `state:gameOver` sont **provisoires** : le serveur ne dit ni au client quel
   est son identifiant, ni quand la partie est finie. `state/GameState` publie `state:gameOver`
   quand il reste au plus un joueur en vie après `GAME_STARTED` (éliminations et départs) ;
@@ -400,7 +400,7 @@ modules qui tiennent la page à jour, puis appelle `app.start()` :
 | ----------------------- | ---------------------------------------------------------------------------------- |
 | `ui/pageElements.ts`    | Seul à connaître les `id` de `index.html` ; nomme un élément manquant au démarrage |
 | `ui/screenNavigator.ts` | Écran visible (connexion, salon, partie) et boutons qui en changent                |
-| `render/GameView.ts`    | Plateau : démarre PixiJS une fois, puis une `GameScene` neuve par partie           |
+| `render/GameView.ts`    | Plateau : une `GameScene` neuve à chaque `GAME_STARTED`, PixiJS démarré une fois   |
 | `ui/helpPanel.ts`       | Panneau d'aide                                                                     |
 
 Les autres modules de `ui/` (état de la connexion, salon, HUD, chrono, fin de partie) se tiennent
@@ -408,10 +408,13 @@ Les autres modules de `ui/` (état de la connexion, salon, HUD, chrono, fin de p
 
 Points à connaître :
 
-- `ScreenNavigator` ne parle au serveur que par le bus. Il reçoit la session (`App`), le plateau
-  et les vues de la session : il demande une partie neuve au plateau quand il affiche l'écran de
-  jeu, et un retour à l'écran de connexion (« Retour au login », « Quitter », coupure) recrée le
-  salon, le HUD, le chrono et l'encart de fin de partie, tandis que le plateau oublie l'état reçu.
+- `ScreenNavigator` ne parle au serveur que par le bus. Il reçoit la session (`App`) et les vues
+  de la session : un retour à l'écran de connexion (« Retour au login », « Quitter », coupure)
+  recrée le salon, le HUD, le chrono et l'encart de fin de partie.
+- `GameView` suit le serveur, pas l'écran : chaque `GAME_STARTED` lui fait afficher une scène
+  neuve, même si la partie précédente est encore à l'écran (partie relancée pendant l'encart de
+  fin). Il est créé après `ScreenNavigator` : l'écran de jeu est déjà visible quand PixiJS démarre
+  et mesure son conteneur.
 - Un `id` renommé dans `index.html` fait échouer `tests/unit/pageElements.test.ts` ; à
   l'exécution, le démarrage s'arrête sur un message qui le nomme.
 - `tests/integration/client-ui.test.ts` monte le client sur le vrai `index.html`, avec une fausse

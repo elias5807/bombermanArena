@@ -25,56 +25,61 @@ interface Rendering {
 }
 
 /**
- * Plateau de la partie : affiche dans `host` une `GameScene` neuve à chaque `showNewGame()`.
+ * Plateau de la partie : affiche dans `host` une `GameScene` neuve à chaque
+ * `server:GAME_STARTED`, même si la partie précédente est encore à l'écran. Rien ne passe
+ * d'une partie à l'autre : bombes, explosions et joueurs disparaissent avec l'ancienne scène.
  *
- * Le moteur de rendu (PixiJS) et les sprites sont préparés au premier appel, puis réutilisés.
- * Une scène n'entend que les messages publiés après sa création : `GameView` garde donc le
- * dernier `server:GAME_STATE` et le donne une fois à la scène neuve, qui reçoit directement
- * les suivants. Ses dimensions sont celles de cet état, `DEFAULT_GRID` à défaut.
+ * Le moteur de rendu (PixiJS) et les sprites sont préparés à la première partie, puis
+ * réutilisés. Une scène n'entend que les messages publiés après sa création : `GameView`
+ * garde donc le dernier `server:GAME_STATE` et le donne une fois à la scène neuve, qui reçoit
+ * directement les suivants. Ses dimensions sont celles de cet état, `DEFAULT_GRID` à défaut.
+ * L'état reçu est oublié quand la connexion se ferme ou se coupe.
  *
- * Le plateau vit aussi longtemps que la page ; `reset()` oublie la session terminée.
+ * `host` doit être visible quand `server:GAME_STARTED` parvient au plateau : PixiJS mesure sa
+ * taille au démarrage. Le plateau vit aussi longtemps que la page.
  *
  * @example
- * const board = new GameView(document.querySelector('#canvas-container'), app.bus);
- * // ... l'écran de jeu est affiché :
- * void board.showNewGame();
+ * // Après ScreenNavigator, qui affiche l'écran de jeu sur le même GAME_STARTED :
+ * new GameView(document.querySelector('#canvas-container'), app.bus);
  */
 export class GameView {
   private readonly host: HTMLElement;
   private readonly bus: AppEventBus;
   private readonly createRenderer: (host: HTMLElement) => Promise<SceneHost>;
   private readonly loadSprites: () => Promise<SpriteTextures>;
-  /** Démarrage du rendu, lancé au premier `showNewGame()` ; `null` avant, ou après un échec. */
+  /** Démarrage du rendu, lancé à la première partie ; `null` avant, ou après un échec. */
   private rendering: Promise<Rendering> | null = null;
   private latestState: GameStateMessage | null = null;
 
   /**
    * @param host Élément qui reçoit le canvas, et dont le canvas suit la taille.
-   * @param bus Bus de l'application : les scènes y lisent l'état du serveur.
+   * @param bus Bus de l'application : le plateau et ses scènes y lisent l'état du serveur.
    */
   constructor(host: HTMLElement, bus: AppEventBus, options: GameViewOptions = {}) {
     this.host = host;
     this.bus = bus;
     this.createRenderer = options.createRenderer ?? ((element) => PixiRenderer.create(element));
     this.loadSprites = options.loadSprites ?? loadSprites;
+
+    bus.on('server:GAME_STARTED', () => this.showNewGame());
     bus.on('server:GAME_STATE', (message) => {
       this.latestState = message;
     });
+    // Le serveur a retiré le joueur : la session suivante repart de rien.
+    bus.on('connection:closed', () => this.forget());
+    bus.on('connection:lost', () => this.forget());
   }
 
   /**
-   * Affiche une partie neuve : une `GameScene` neuve remplace la précédente dès que le rendu
-   * est prêt. `host` doit être visible : PixiJS mesure sa taille au démarrage.
-   *
-   * @returns une promesse tenue une fois la scène affichée. Elle n'est jamais rejetée : un
-   *   échec du rendu est écrit dans la console, et l'appel suivant réessaie.
+   * Remplace la scène par une neuve dès que le rendu est prêt. Un échec du rendu est écrit
+   * dans la console, et la partie suivante réessaie.
    */
-  showNewGame(): Promise<void> {
+  private showNewGame(): void {
     this.rendering ??= this.startRendering().catch((error: unknown) => {
       this.rendering = null; // nouvel essai à la partie suivante
       throw error;
     });
-    return this.rendering
+    this.rendering
       .then(({ renderer, sprites }) => {
         // `setScene` détruit la scène précédente, ses sprites et ses bombes.
         const scene = new GameScene(this.latestState?.grid ?? DEFAULT_GRID, sprites, this.bus);
@@ -88,8 +93,7 @@ export class GameView {
       });
   }
 
-  /** Oublie l'état reçu pendant la session terminée. */
-  reset(): void {
+  private forget(): void {
     this.latestState = null;
   }
 

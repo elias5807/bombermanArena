@@ -21,7 +21,7 @@ function screen(hidden: boolean): HTMLElement {
   return element;
 }
 
-/** Une navigation sur des écrans neufs, avec une fausse session, un faux plateau et de fausses vues. */
+/** Une navigation sur des écrans neufs, avec une fausse session et de fausses vues. */
 function setup() {
   const bus = new EventBus<AppEvents>((error) => {
     throw error;
@@ -37,7 +37,6 @@ function setup() {
     quitButton: document.createElement('button'),
   };
   const session = { start: vi.fn(() => Promise.resolve()), stop: vi.fn() };
-  const board = { showNewGame: vi.fn(), reset: vi.fn() };
   /** Les vues montées, une liste par session. */
   const mounted: { dispose: Mock }[][] = [];
   const mountSessionViews = vi.fn(() => {
@@ -45,7 +44,7 @@ function setup() {
     mounted.push(views);
     return views;
   });
-  const navigator = new ScreenNavigator(elements, bus, { session, board, mountSessionViews });
+  const navigator = new ScreenNavigator(elements, bus, { session, mountSessionViews });
 
   /** Les écrans affichés, d'après le DOM. */
   const visible = () =>
@@ -60,7 +59,6 @@ function setup() {
     bus,
     elements,
     session,
-    board,
     mounted,
     mountSessionViews,
     navigator,
@@ -146,47 +144,32 @@ describe('ScreenNavigator', () => {
   });
 
   describe('salon → partie', () => {
-    it('« Lancer la partie » publie input:start, affiche la partie et en demande une au plateau', () => {
-      const { elements, board, navigator, visible, named } = inLobby();
+    it('« Lancer la partie » publie input:start et affiche la partie', () => {
+      const { elements, navigator, visible, named } = inLobby();
 
       elements.startButton.click();
 
       expect(named('input:start')).toHaveLength(1);
       expect(navigator.screen).toBe('game');
       expect(visible()).toEqual(['game']);
-      expect(board.showNewGame).toHaveBeenCalledTimes(1);
     });
 
-    it('server:GAME_STARTED affiche la partie chez les autres joueurs', () => {
-      const { bus, board, navigator, visible } = inLobby();
+    it('server:GAME_STARTED affiche la partie chez tous les joueurs', () => {
+      const { bus, navigator, visible } = inLobby();
 
       bus.emit('server:GAME_STARTED', GAME_STARTED);
 
       expect(navigator.screen).toBe('game');
       expect(visible()).toEqual(['game']);
-      expect(board.showNewGame).toHaveBeenCalledTimes(1);
     });
 
-    it('le plateau démarre sa partie une fois l’écran de jeu visible', () => {
-      const { elements, board, visible } = inLobby();
-      let visibleAtStart: ScreenName[] = [];
-      board.showNewGame.mockImplementation(() => {
-        visibleAtStart = visible();
-      });
-
-      elements.startButton.click();
-
-      expect(board.showNewGame).toHaveBeenCalledTimes(1);
-      expect(visibleAtStart).toEqual(['game']);
-    });
-
-    it('sur l’écran de jeu, un GAME_STARTED ne demande pas d’autre partie au plateau', () => {
-      const { bus, board, navigator } = inGame();
+    it('une partie relancée garde l’écran de jeu', () => {
+      const { bus, navigator, visible } = inGame();
 
       bus.emit('server:GAME_STARTED', GAME_STARTED);
 
       expect(navigator.screen).toBe('game');
-      expect(board.showNewGame).toHaveBeenCalledTimes(1);
+      expect(visible()).toEqual(['game']);
     });
   });
 
@@ -197,7 +180,7 @@ describe('ScreenNavigator', () => {
     ] as const)(
       '%s ferme la connexion, remet la session à zéro, puis en ouvre une neuve',
       (_label, start, button) => {
-        const { elements, session, board, mounted, navigator, visible } = start();
+        const { elements, session, mounted, mountSessionViews, navigator, visible } = start();
 
         elements[button].click();
 
@@ -207,27 +190,27 @@ describe('ScreenNavigator', () => {
           expect(view.dispose).toHaveBeenCalledTimes(1);
         }
         expect(mounted).toHaveLength(2);
-        expect(board.reset).toHaveBeenCalledTimes(1);
         expect(session.stop).toHaveBeenCalledTimes(1);
         expect(session.start).toHaveBeenCalledTimes(1);
         // La connexion est fermée avant la remise à zéro, et rouverte après.
         const [stopOrder] = session.stop.mock.invocationCallOrder;
         const [startOrder] = session.start.mock.invocationCallOrder;
-        const [resetOrder] = board.reset.mock.invocationCallOrder;
-        expect(stopOrder).toBeLessThan(resetOrder);
-        expect(resetOrder).toBeLessThan(startOrder);
+        const [disposeOrder] = mounted[0][0].dispose.mock.invocationCallOrder;
+        const [remountOrder] = mountSessionViews.mock.invocationCallOrder.slice(-1);
+        expect(stopOrder).toBeLessThan(disposeOrder);
+        expect(disposeOrder).toBeLessThan(remountOrder);
+        expect(remountOrder).toBeLessThan(startOrder);
       },
     );
 
     it('connection:lost ramène à l’écran de connexion sans rouvrir de connexion', () => {
-      const { bus, session, board, mounted, navigator, visible } = inGame();
+      const { bus, session, mounted, navigator, visible } = inGame();
 
       bus.emit('connection:lost');
 
       expect(navigator.screen).toBe('login');
       expect(visible()).toEqual(['login']);
       expect(mounted).toHaveLength(2);
-      expect(board.reset).toHaveBeenCalledTimes(1);
       // « Réessayer » de ConnectionStatus s'en charge.
       expect(session.stop).not.toHaveBeenCalled();
       expect(session.start).not.toHaveBeenCalled();
@@ -249,14 +232,15 @@ describe('ScreenNavigator', () => {
       }
     });
 
-    it('une partie suivante redemande une partie neuve au plateau', () => {
-      const { bus, elements, board } = inGame();
+    it('après « Quitter », la partie suivante s’affiche comme la première', () => {
+      const { bus, elements, navigator, visible } = inGame();
 
       elements.quitButton.click();
       elements.joinButton.click();
       bus.emit('server:GAME_STARTED', GAME_STARTED);
 
-      expect(board.showNewGame).toHaveBeenCalledTimes(2);
+      expect(navigator.screen).toBe('game');
+      expect(visible()).toEqual(['game']);
     });
   });
 });

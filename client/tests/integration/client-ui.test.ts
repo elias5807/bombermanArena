@@ -64,15 +64,20 @@ async function mount() {
   const connection = new FakeConnection();
   const renderer = new FakeRenderer();
   const keyboard = fakeKeyboard();
+  /** Les écrans visibles quand le plateau a démarré PixiJS. */
+  const screensWhenRendering: string[][] = [];
   await mountClient(document, new App(connection), {
     rendering: {
-      createRenderer: () => Promise.resolve(renderer),
+      createRenderer: () => {
+        screensWhenRendering.push(visibleScreens());
+        return Promise.resolve(renderer);
+      },
       loadSprites: () => Promise.resolve(blankTextures()),
     },
     keyboard: keyboard.source,
   });
   const sentTypes = () => connection.sent.map(({ type }) => type);
-  return { connection, renderer, press: keyboard.press, sentTypes };
+  return { connection, renderer, press: keyboard.press, sentTypes, screensWhenRendering };
 }
 
 type Client = Awaited<ReturnType<typeof mount>>;
@@ -159,6 +164,16 @@ describe('client monté sur index.html', () => {
     expect(texts('.player-name')).toEqual(['Alice (vous)', 'Bob']);
   });
 
+  it('le plateau démarre PixiJS une fois l’écran de jeu affiché', async () => {
+    const client = await mount();
+    joinLobby(client);
+
+    // Bob a lancé la partie : seul le serveur prévient Alice.
+    await serverStartsGame(client);
+
+    expect(client.screensWhenRendering).toEqual([['#game-screen']]);
+  });
+
   it('le clavier ne pilote que la partie, tant que le joueur local est en vie', async () => {
     const client = await mount();
     joinLobby(client);
@@ -200,6 +215,36 @@ describe('client monté sur index.html', () => {
     });
 
     expect(texts('#canvas-container .game-over:not(.hidden) h2')).toEqual(['Victoire !']);
+  });
+
+  it('une partie relancée sur l’écran de fin repart d’un plateau neuf', async () => {
+    const client = await inGame();
+    const { connection, renderer } = client;
+    // Bob s'élimine : Alice voit sa victoire, puis pose une bombe.
+    connection.receive({
+      type: 'BOMB_EXPLODED',
+      bombId: 'b1',
+      col: 13,
+      row: 1,
+      affectedCells: [{ col: 13, row: 1 }],
+      eliminatedPlayers: ['p2'],
+    });
+    connection.receive({ type: 'BOMB_PLACED', bombId: 'b2', playerId: 'p1', col: 2, row: 1 });
+    const finishedGame = renderer.current;
+    expect(sceneContent(finishedGame).effects).toBeGreaterThan(0);
+    // Bob quitte, revient sous un autre identifiant et relance : le serveur efface la bombe
+    // sans message.
+    connection.receive({ type: 'GAME_STATE', players: [{ ...ALICE, col: 2 }] });
+    connection.receive({ type: 'PLAYER_JOINED', playerId: 'p3', playerName: 'Bob' });
+    const bobAgain = { ...BOB, playerId: 'p3' };
+
+    await serverStartsGame(client, [ALICE, bobAgain]);
+
+    expect(visibleScreens()).toEqual(['#game-screen']);
+    expect(renderer.current).not.toBe(finishedGame);
+    expect(sceneContent(renderer.current)).toEqual({ players: 2, effects: 0 });
+    expect(texts('.game-over:not(.hidden)')).toEqual([]);
+    expect(texts('.player-status')).toEqual(['En jeu', 'En jeu']);
   });
 
   it('« Quitter » ferme la connexion, remet l’écran de connexion à zéro et en rouvre une', async () => {

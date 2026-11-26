@@ -19,14 +19,6 @@ export interface SessionControl {
   stop(): void;
 }
 
-/** Le plateau de la partie, vu par la navigation : `GameView` (`render/`) le fournit. */
-export interface GameBoard {
-  /** Affiche une partie neuve. L'écran de jeu est déjà visible. */
-  showNewGame(): void;
-  /** Oublie la session terminée. */
-  reset(): void;
-}
-
 /** Les éléments de `index.html` que `ScreenNavigator` affiche ou écoute. */
 export interface NavigationElements {
   screens: Readonly<Record<ScreenName, HTMLElement>>;
@@ -43,7 +35,6 @@ export interface NavigationElements {
 
 export interface NavigationDependencies {
   session: SessionControl;
-  board: GameBoard;
   /**
    * Crée les vues d'une session (salon, HUD, chrono, fin de partie), branchées sur le bus.
    * Appelée à la création de la navigation, puis à chaque retour à l'écran de connexion.
@@ -56,21 +47,19 @@ export interface NavigationDependencies {
  *
  * - « Rejoindre », ou Entrée dans le champ du pseudo, publie `input:join` puis affiche le salon ;
  * - « Lancer la partie » publie `input:start` puis affiche la partie, que `server:GAME_STARTED`
- *   affiche aussi chez les autres joueurs : le plateau reçoit alors une partie neuve, sauf si
- *   l'écran de jeu était déjà affiché ;
+ *   affiche aussi chez les autres joueurs. Le plateau (`GameView`) suit le serveur, pas l'écran ;
  * - « Retour au login » et « Quitter » ferment la connexion, ce qui retire le joueur du
  *   serveur, puis en ouvrent une neuve ;
  * - `connection:lost` ramène aussi à l'écran de connexion.
  *
  * Revenir à l'écran de connexion remet la session à zéro : les vues sont recréées par
- * `mountSessionViews` et le plateau oublie l'état reçu.
+ * `mountSessionViews`.
  *
  * La navigation vit aussi longtemps que la page : elle n'a rien à libérer.
  *
  * @example
  * const navigation = new ScreenNavigator(elements, app.bus, {
  *   session: app,
- *   board: new GameView(boardElement, app.bus),
  *   mountSessionViews: () => [new GameTimer(timerElement, app.bus)],
  * });
  * navigation.screen; // 'login'
@@ -79,7 +68,6 @@ export class ScreenNavigator {
   private readonly elements: NavigationElements;
   private readonly bus: AppEventBus;
   private readonly session: SessionControl;
-  private readonly board: GameBoard;
   private readonly mountSessionViews: () => readonly Disposable[];
   private sessionViews: readonly Disposable[];
   private current: ScreenName = 'login';
@@ -87,18 +75,17 @@ export class ScreenNavigator {
   constructor(
     elements: NavigationElements,
     bus: AppEventBus,
-    { session, board, mountSessionViews }: NavigationDependencies,
+    { session, mountSessionViews }: NavigationDependencies,
   ) {
     this.elements = elements;
     this.bus = bus;
     this.session = session;
-    this.board = board;
     this.mountSessionViews = mountSessionViews;
     this.sessionViews = mountSessionViews();
     this.show('login');
 
     bus.on('connection:lost', () => this.returnToLogin());
-    bus.on('server:GAME_STARTED', () => this.launchGame());
+    bus.on('server:GAME_STARTED', () => this.show('game'));
 
     elements.joinButton.addEventListener('click', () => this.join());
     elements.pseudoInput.addEventListener('keydown', (event) => {
@@ -109,7 +96,7 @@ export class ScreenNavigator {
     });
     elements.startButton.addEventListener('click', () => {
       bus.emit('input:start');
-      this.launchGame();
+      this.show('game');
     });
     elements.leaveLobbyButton.addEventListener('click', () => this.leave());
     elements.quitButton.addEventListener('click', () => this.leave());
@@ -126,15 +113,6 @@ export class ScreenNavigator {
     this.show('lobby');
   }
 
-  private launchGame(): void {
-    if (this.current === 'game') {
-      return;
-    }
-    // Dans cet ordre : PixiJS mesure le conteneur du plateau à son démarrage.
-    this.show('game');
-    this.board.showNewGame();
-  }
-
   /** Quitte le salon ou la partie : le serveur retire le joueur quand sa connexion se ferme. */
   private leave(): void {
     this.session.stop();
@@ -147,7 +125,6 @@ export class ScreenNavigator {
       view.dispose();
     }
     this.sessionViews = this.mountSessionViews();
-    this.board.reset();
     this.show('login');
   }
 
