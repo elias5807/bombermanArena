@@ -8,19 +8,16 @@ import { GameTimer } from './ui/gameTimer';
 import { HelpPanel } from './ui/helpPanel';
 import { Hud } from './ui/hud';
 import { LobbyView } from './ui/lobbyList';
+import { ScreenNavigator } from './ui/screenNavigator';
 import './style.css';
 
 /**
- * Point d'entrée de l'application.
+ * Point d'entrée de l'application : assemble le client sur la page `index.html`.
  *
- * Enchaîne les écrans décrits dans `index.html` (connexion, salle d'attente, partie, aide)
- * et y branche les modules de `ui/`, qui se tiennent à jour d'après le bus : état de la
- * connexion, salon, HUD, chrono et encart de fin de partie. Au premier lancement de partie,
- * démarre le rendu PixiJS et charge les sprites ; chaque partie a ensuite sa `GameScene`
- * neuve. Le clavier pilote la partie tant que le joueur local est en vie.
- *
- * « Retour au login » et « Quitter » ferment la connexion, ce qui retire le joueur du
- * serveur, puis en ouvrent une neuve. Une coupure ramène aussi à l'écran de connexion.
+ * `App` relie la connexion au bus. Les modules de `ui/` se tiennent à jour d'après le bus :
+ * état de la connexion, salon, HUD, chrono et encart de fin de partie. `ScreenNavigator`
+ * enchaîne les écrans, `GameView` dessine la partie et `HelpPanel` ouvre l'aide. Le clavier
+ * pilote la partie tant que le joueur local est en vie.
  */
 
 // DOM Elements
@@ -65,90 +62,35 @@ new ConnectionStatus(
   app.bus,
   { serverUrl: SERVER_URL, retry: () => void app.start() },
 );
-const board = new GameView(canvasContainer, app.bus);
-
-/** Écrans tenus à jour d'après le bus, recréés à neuf pour chaque session. */
-function mountScreens(): { dispose(): void }[] {
-  return [
-    new LobbyView(
-      { list: lobbyPlayersList, startButton: btnStartGame, startHint },
-      app.bus,
-      app.state,
-    ),
-    new Hud(hudPlayerList, app.bus, app.state),
-    new GameTimer(timerDisplay, app.bus),
-    new GameOverPanel(canvasContainer, app.bus, app.state),
-  ];
-}
-let screens = mountScreens();
-
-// Les écrans écoutent le bus avant l'ouverture : ils ne manquent aucun événement.
-void app.start();
-
-/** Revient à l'écran de connexion, avec le salon, le HUD, le chrono et l'encart remis à zéro. */
-function showLoginScreen() {
-  for (const screen of screens) {
-    screen.dispose();
-  }
-  screens = mountScreens();
-  board.reset();
-
-  lobbyScreen.classList.add('hidden');
-  gameScreen.classList.add('hidden');
-  loginScreen.classList.remove('hidden');
-}
-
-/** Quitte le salon ou la partie : le serveur retire le joueur quand sa connexion se ferme. */
-function leaveSession() {
-  app.stop();
-  showLoginScreen();
-  void app.start();
-}
-
-app.bus.on('connection:lost', showLoginScreen);
-
-function launchGame() {
-  if (gameScreen.classList.contains('hidden')) {
-    lobbyScreen.classList.add('hidden');
-    gameScreen.classList.remove('hidden');
-    void board.showNewGame();
-  }
-}
-
-// Lancement automatique synchronisé quand le serveur annonce le début de partie
-app.bus.on('server:GAME_STARTED', () => {
-  launchGame();
-});
-
-// Actions Login -> Lobby (bouton actif seulement connexion ouverte, voir ConnectionStatus)
-btnLogin.addEventListener('click', () => {
-  const pseudo = pseudoInput.value.trim() || 'VoleurInconnu';
-
-  // Notification au serveur via le bus d'événements
-  app.bus.emit('input:join', { playerName: pseudo });
-
-  // Transition vers la salle d'attente
-  loginScreen.classList.add('hidden');
-  lobbyScreen.classList.remove('hidden');
-});
-
-pseudoInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') btnLogin.click();
-});
-
-// Actions Lobby -> Game ou Login
-btnLeaveLobby.addEventListener('click', leaveSession);
-
-btnStartGame.addEventListener('click', () => {
-  app.bus.emit('input:start');
-  launchGame();
-});
-
-// Actions Game -> Login
-btnQuit.addEventListener('click', leaveSession);
+const navigation = new ScreenNavigator(
+  {
+    screens: { login: loginScreen, lobby: lobbyScreen, game: gameScreen },
+    pseudoInput,
+    joinButton: btnLogin,
+    startButton: btnStartGame,
+    leaveLobbyButton: btnLeaveLobby,
+    quitButton: btnQuit,
+  },
+  app.bus,
+  {
+    session: app,
+    board: new GameView(canvasContainer, app.bus),
+    // Salon, HUD, chrono et encart de fin de partie : recréés à neuf pour chaque session.
+    mountSessionViews: () => [
+      new LobbyView(
+        { list: lobbyPlayersList, startButton: btnStartGame, startHint },
+        app.bus,
+        app.state,
+      ),
+      new Hud(hudPlayerList, app.bus, app.state),
+      new GameTimer(timerDisplay, app.bus),
+      new GameOverPanel(canvasContainer, app.bus, app.state),
+    ],
+  },
+);
 
 // Contrôles clavier en jeu, tant que le joueur local est en vie
-new KeyboardInput(
-  app.bus,
-  () => !gameScreen.classList.contains('hidden') && app.state.isLocalPlayerAlive,
-);
+new KeyboardInput(app.bus, () => navigation.screen === 'game' && app.state.isLocalPlayerAlive);
+
+// Tout le client écoute le bus : aucun événement ne se perd à l'ouverture de la connexion.
+void app.start();
